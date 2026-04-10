@@ -1,0 +1,10 @@
+build/
+.dart_tool/
+.packages
+pubspec.lock
+.venv/
+.vscode/
+__pycache__/
+*.log
+android/.gradle/
+ios/Pods/

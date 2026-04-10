@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1094978219595",
+    "project_id": "unibus-app-e8e4b",
+    "storage_bucket": "unibus-app-e8e4b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1094978219595:android:b934d931c38456d30fa7ce",
+        "android_client_info": {
+          "package_name": "com.reachad.unibus"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAtWoViL2YaHNfU2LCh-vf_OqwtP_Z2Qik"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
