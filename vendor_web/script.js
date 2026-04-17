@@ -1,5 +1,6 @@
 // ⚠️ change this to your production URL (e.g., https://your-app.onrender.com/api)
 const API_BASE = 'http://192.168.0.106:8000/api';
+const FIREBASE_DB_URL = 'https://unibus-app-e8e4b-default-rtdb.firebaseio.com';
 
 // Navigation Logic
 document.querySelectorAll('.nav-item').forEach(button => {
@@ -108,16 +109,24 @@ async function fetchDemand() {
         const demand = await response.json();
         const tbody = document.querySelector('#demand-table tbody');
         tbody.innerHTML = '';
+        if (demand.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:24px">No active demand at the moment.</td></tr>';
+        }
         demand.forEach(item => {
             const tr = document.createElement('tr');
+            const needsBus = item.needs_bus;
+            const statusBadge = needsBus
+                ? `<span class="status-badge status-SOS">⚠️ Needs Bus</span>`
+                : `<span class="status-badge status-Active">✅ Covered</span>`;
             tr.innerHTML = `
                 <td><strong>${item.route_name}</strong><br><small>${item.boarding} &rarr; ${item.dropping}</small></td>
                 <td><span class="status-badge status-Pending">${item.waiting_count} Waiting</span></td>
+                <td>${item.active_buses} Bus(es)</td>
+                <td>${statusBadge}</td>
                 <td><button class="btn btn-small primary" onclick="showDispatchForm(${item.route_id}, '${item.route_name}')">Dispatch</button></td>
             `;
             tbody.appendChild(tr);
         });
-        // Ensure vehicles are loaded for the dropdown
         fetchVehicles();
     } catch (error) {
         console.error('Error fetching demand:', error);
@@ -176,14 +185,18 @@ async function fetchActiveTrips() {
         const trips = await response.json();
         const tbody = document.querySelector('#active-trips-table tbody');
         tbody.innerHTML = '';
-        trips.filter(t => t.status === 'Active').forEach(t => {
+        const active = trips.filter(t => t.status === 'Active');
+        if (active.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:24px">No active trips.</td></tr>';
+        }
+        active.forEach(t => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><strong>${t.bus_id_code}</strong></td>
-                <td>${t.route_details.name}</td>
+                <td><strong style="font-size:18px;letter-spacing:3px;color:#2D6A4F">${t.bus_id_code}</strong><br><small>Give this to Checker</small></td>
+                <td>${t.route_details ? t.route_details.name : '—'}</td>
                 <td>${t.bus_number}</td>
                 <td><span class="status-badge status-Active">${t.status}</span></td>
-                <td><button class="btn btn-small secondary" onclick="completeTrip(${t.id})">Complete</button></td>
+                <td><button class="btn btn-small secondary" onclick="completeTrip(${t.id})">Complete Trip</button></td>
             `;
             tbody.appendChild(tr);
         });
@@ -284,11 +297,15 @@ document.getElementById('checker-form').addEventListener('submit', async (e) => 
 
 async function fetchStaff() {
     try {
-        const response = await fetch(`${API_BASE}/students/`);
-        const allUsers = await response.json();
-        const checkers = allUsers.filter(u => u.role === 'Checker');
+        // Use dedicated checkers endpoint
+        const response = await fetch(`${API_BASE}/vendor/checkers/`);
+        const checkers = await response.json();
         const tbody = document.querySelector('#staff-list-table tbody');
         tbody.innerHTML = '';
+        if (checkers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#aaa;padding:24px">No checkers added yet.</td></tr>';
+            return;
+        }
         checkers.forEach(c => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -316,7 +333,19 @@ document.getElementById('recharge-form').addEventListener('submit', async (e) =>
         });
         if (response.ok) {
             const data = await response.json();
-            showMessage('recharge-msg', `Success! Recharged for ${data.student_name}.`, true);
+            showMessage('recharge-msg', `Success! New Balance: ${data.new_balance}`, true);
+            
+            // 🔥 Live Sync to Firebase Realtime Database
+            try {
+                await fetch(`${FIREBASE_DB_URL}/wallets/${studentId}.json`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ balance: data.new_balance, last_updated: new Date().toISOString() })
+                });
+                console.log('Firebase sync successful');
+            } catch (fbError) {
+                console.error('Firebase sync failed:', fbError);
+            }
+
             document.getElementById('recharge-form').reset();
         }
     } catch (error) {

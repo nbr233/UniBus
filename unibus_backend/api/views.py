@@ -1,5 +1,6 @@
 import uuid
-from datetime import timedelta
+from datetime import date
+from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
@@ -8,90 +9,109 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, action
 from .models import StudentProfile, Route, Vehicle, Bus, Ticket, Notice, SOSAlert
 from .serializers import (
-    StudentProfileSerializer, 
+    StudentProfileSerializer,
     RouteSerializer,
     VehicleSerializer,
-    BusSerializer, 
-    TicketSerializer, 
-    NoticeSerializer, 
+    BusSerializer,
+    TicketSerializer,
+    NoticeSerializer,
     SOSAlertSerializer
 )
 
 
+# ─────────────────────────────────────────
+# 1. Route ViewSet
+# ─────────────────────────────────────────
 class RouteViewSet(viewsets.ModelViewSet):
     queryset = Route.objects.all()
     serializer_class = RouteSerializer
 
+
+# ─────────────────────────────────────────
+# 2. Vehicle ViewSet
+# ─────────────────────────────────────────
 class VehicleViewSet(viewsets.ModelViewSet):
     queryset = Vehicle.objects.all()
     serializer_class = VehicleSerializer
 
+
+# ─────────────────────────────────────────
+# 3. Bus ViewSet (Trip Dispatch)
+# ─────────────────────────────────────────
 class BusViewSet(viewsets.ModelViewSet):
     serializer_class = BusSerializer
-    queryset = Bus.objects.all().order_by('-date', '-departure_time')
+    queryset = Bus.objects.all().order_by('-date', '-id')
 
     def perform_create(self, serializer):
-        # When a bus is dispatched, mark the vehicle as unavailable
+        """
+        On dispatch:
+        1. Mark vehicle as unavailable.
+        2. FIFO-assign waiting passengers for this route (up to total_seats).
+        3. Update available_seats on the bus.
+        """
         vehicle = serializer.validated_data.get('vehicle')
         route = serializer.validated_data.get('route')
         total_seats = serializer.validated_data.get('total_seats', 40)
 
         if vehicle:
             vehicle.is_available = False
-            vehicle.save()
-        
-        # Save the bus trip
+            vehicle.save(update_fields=['is_available'])
+
         bus = serializer.save()
 
-        # Automatically link waiting passengers for this route to this bus
+        # FIFO assignment: oldest waiting tickets first
         waiting_tickets = Ticket.objects.filter(
             route=route,
             status='Active',
-            bus_assigned__isnull=True
+            bus_assigned__isnull=True,
+            travel_date=date.today()
         ).order_by('booked_at')[:total_seats]
 
-        assigned_count = waiting_tickets.count()
-        
-        # Bulk update tickets to link them to the bus
+        assigned_count = 0
         for ticket in waiting_tickets:
             ticket.bus_assigned = bus
-            ticket.save()
+            ticket.save(update_fields=['bus_assigned'])
+            assigned_count += 1
 
-        # Update the bus with the remaining seats
-        bus.available_seats = total_seats - assigned_count
-        bus.save()
+        bus.available_seats = max(0, total_seats - assigned_count)
+        bus.save(update_fields=['available_seats'])
 
     @action(detail=True, methods=['post'])
     def complete_trip(self, request, pk=None):
+        """Mark a bus trip as completed, release vehicle, mark tickets as Used."""
         bus = self.get_object()
         bus.status = 'Completed'
+        bus.save(update_fields=['status'])
+
         if bus.vehicle:
             bus.vehicle.is_available = True
-            bus.vehicle.save()
-        bus.save()
-        
-        # Mark all tickets for this bus as used
-        Ticket.objects.filter(bus_assigned=bus, status='Active').update(status='Used')
-        
-        return Response({'status': 'Trip completed and vehicle released'})
+            bus.vehicle.save(update_fields=['is_available'])
+
+        Ticket.objects.filter(
+            bus_assigned=bus, status='Active'
+        ).update(status='Used')
+
+        return Response({'message': f'Trip {bus.bus_id_code} completed. Vehicle released.'})
 
 
-# 3. Ticket ViewSet
+# ─────────────────────────────────────────
+# 4. Ticket ViewSet
+# ─────────────────────────────────────────
 class TicketViewSet(viewsets.ModelViewSet):
     serializer_class = TicketSerializer
 
     def get_queryset(self):
         """
-        Receives full email from Flutter (e.g. student@diu.edu.bd).
-        Looks up StudentProfile by email, then filters tickets accordingly.
+        Returns tickets for a student identified by email or student_id.
+        ?student_id=email&history=true  → Active + Used (all history)
+        ?student_id=email               → Active tickets for today only
         """
-        identifier = self.request.query_params.get('student_id')  # Expects full email
+        identifier = self.request.query_params.get('student_id')
         show_history = self.request.query_params.get('history', 'false').lower() == 'true'
 
         if not identifier:
             return Ticket.objects.none()
 
-        # Look up student by email if '@' present, otherwise by student_id
         try:
             if "@" in identifier:
                 student = StudentProfile.objects.get(email=identifier)
@@ -100,19 +120,25 @@ class TicketViewSet(viewsets.ModelViewSet):
         except StudentProfile.DoesNotExist:
             return Ticket.objects.none()
 
-        # Filter at the database level — avoids the N+1 query problem
-        cutoff = timezone.now() - timedelta(hours=1)
-
         if show_history:
-            return Ticket.objects.filter(user=student, booked_at__lt=cutoff).order_by('-booked_at')
+            # Return all tickets (Active + Used) for history screen
+            return Ticket.objects.filter(
+                user=student,
+                status__in=['Active', 'Used']
+            ).order_by('-booked_at')
 
-        return Ticket.objects.filter(user=student, booked_at__gte=cutoff).order_by('-booked_at')
+        # Active screen — today's active tickets only
+        return Ticket.objects.filter(
+            user=student,
+            status='Active',
+            travel_date=date.today()
+        ).order_by('-booked_at')
 
     def create(self, request, *args, **kwargs):
         """
-        Expects from Flutter: { "email": "...", "bus_id": 1 }
-        Looks up StudentProfile by email and books the ticket.
-        Uses atomic transaction to prevent race conditions.
+        Book a ticket.
+        Body: { "email": "...", "route_id": 1 }
+        Validates: wallet balance >= fare, no existing active ticket on route today.
         """
         user_email = request.data.get('email')
         route_id = request.data.get('route_id')
@@ -127,144 +153,160 @@ class TicketViewSet(viewsets.ModelViewSet):
             student = StudentProfile.objects.get(email=user_email)
         except StudentProfile.DoesNotExist:
             return Response(
-                {"error": "Profile not found. Please complete your registration."},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Profile not found. Please complete your registration first."},
+                status=status.HTTP_404_NOT_FOUND
             )
 
         try:
             route = Route.objects.get(id=route_id)
         except Route.DoesNotExist:
+            return Response({"error": "Route not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check for duplicate active ticket today
+        existing = Ticket.objects.filter(
+            user=student, route=route, status='Active', travel_date=date.today()
+        ).exists()
+        if existing:
             return Response(
-                {"error": "Route not found"},
+                {"error": "You already have an active ticket for this route today."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Check if student already has an active ticket
-        existing_tickets = Ticket.objects.filter(user=student, route=route).order_by('-booked_at')
-        for t in existing_tickets:
-            if t.is_active:
-                return Response(
-                    {"error": "You already have an active ticket for this route."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
+        # Check wallet balance
         if student.wallet_balance < route.fare:
             return Response(
-                {"error": f"Insufficient wallet balance. Fare is ৳{route.fare}, but your balance is ৳{student.wallet_balance}."},
+                {"error": f"Insufficient balance. Fare: ৳{route.fare} | Your balance: ৳{student.wallet_balance}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
             with transaction.atomic():
-                student.wallet_balance -= route.fare
-                student.save()
+                # Deduct fare atomically
+                StudentProfile.objects.filter(pk=student.pk).update(
+                    wallet_balance=F('wallet_balance') - route.fare
+                )
+                student.refresh_from_db()
+                # Trigger Firebase sync via save()
+                student.save(update_fields=['wallet_balance'])
 
-                unique_b_id = f"UB-{uuid.uuid4().hex[:8].upper()}"
+                booking_id = f"UB-{uuid.uuid4().hex[:8].upper()}"
                 ticket = Ticket.objects.create(
                     user=student,
                     route=route,
-                    booking_id=unique_b_id
+                    booking_id=booking_id,
+                    travel_date=date.today()
                 )
 
             serializer = self.get_serializer(ticket)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            print(f"--- Critical Error: {str(e)} ---")
             return Response(
-                {"error": "An internal error occurred"},
+                {"error": f"Booking failed: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
-# 4. Checker Ticket Validation API
+# ─────────────────────────────────────────
+# 5. Validate Ticket (Checker API)
+# ─────────────────────────────────────────
 @api_view(['POST'])
 def validate_ticket(request):
     """
-    Expects { "bus_id_code": "123456", "booking_id": "UB-XXXXXX" }
-    Validates the ticket and updates its status to 'Used'.
+    Checker scans QR. Body: { "bus_id_code": "ABC123", "booking_id": "UB-XXXXXXXX" }
+    Validates: ticket exists, active, correct bus, today's travel date.
     """
-    bus_id_code = request.data.get('bus_id_code')
-    booking_id = request.data.get('booking_id')
+    bus_id_code = request.data.get('bus_id_code', '').strip().upper()
+    booking_id = request.data.get('booking_id', '').strip()
 
     if not bus_id_code or not booking_id:
-        return Response({"error": "bus_id_code and booking_id are required"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": "bus_id_code and booking_id are required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
+    # Validate bus
     try:
-        # Check if bus code is valid
         bus = Bus.objects.get(bus_id_code=bus_id_code)
     except Bus.DoesNotExist:
-        return Response({"error": "Invalid Bus ID code"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"error": "Invalid Bus ID. Please check the 6-character code."}, status=status.HTTP_404_NOT_FOUND)
 
+    if bus.status == 'Completed':
+        return Response({"error": "This bus trip is already completed."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Validate ticket
     try:
-        # Check if ticket exists
-        ticket = Ticket.objects.get(booking_id=booking_id)
+        ticket = Ticket.objects.select_related('user', 'route', 'bus_assigned').get(booking_id=booking_id)
     except Ticket.DoesNotExist:
-        return Response({"error": "Ticket not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"error": "Ticket not found. Invalid QR code."}, status=status.HTTP_404_NOT_FOUND)
 
-    # Validation Logic
+    if ticket.status == 'Used':
+        return Response({"error": "This ticket has already been used."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if ticket.status == 'Expired':
+        return Response({"error": "This ticket has expired."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if ticket.travel_date != date.today():
+        return Response(
+            {"error": f"This ticket is for {ticket.travel_date}, not today."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     if ticket.route != bus.route:
-        return Response({"error": "Ticket does not match this bus route"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": f"Ticket is for route '{ticket.route.name}', but this bus operates '{bus.route.name}'."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
-    if ticket.status != 'Active':
-        return Response({"error": f"Ticket is already {ticket.status}"}, status=status.HTTP_400_BAD_REQUEST)
-
+    # All checks passed — mark as Used
     with transaction.atomic():
         ticket.status = 'Used'
         ticket.bus_assigned = bus
-        ticket.save()
+        ticket.save(update_fields=['status', 'bus_assigned'])
 
-        # Update available seats if any
         if bus.available_seats > 0:
-            bus.available_seats = F('available_seats') - 1
-            bus.save()
+            Bus.objects.filter(pk=bus.pk).update(available_seats=F('available_seats') - 1)
 
     return Response({
-        "message": "Ticket validation successful!",
+        "message": "✅ Ticket Valid! Passenger boarded.",
         "student_name": f"{ticket.user.first_name} {ticket.user.last_name}",
         "student_id": ticket.user.student_id,
+        "route": ticket.route.name,
         "booking_id": ticket.booking_id
     }, status=status.HTTP_200_OK)
 
 
-# 5. Route Suggestions API
-@api_view(['GET'])
-def get_route_suggestions(request):
-    boarding_points = list(Route.objects.values_list('boarding_point', flat=True).distinct())
-    dropping_points = list(Route.objects.values_list('dropping_point', flat=True).distinct())
-
-    return Response({
-        'boarding': boarding_points,
-        'dropping': dropping_points
-    })
-
-# 6. Student Profile ViewSet (lookup by email)
+# ─────────────────────────────────────────
+# 6. Student Profile ViewSet
+# ─────────────────────────────────────────
 class StudentProfileViewSet(viewsets.ModelViewSet):
     queryset = StudentProfile.objects.all()
     serializer_class = StudentProfileSerializer
     lookup_field = 'email'
 
 
+# ─────────────────────────────────────────
 # 7. Notice ViewSet
+# ─────────────────────────────────────────
 class NoticeViewSet(viewsets.ModelViewSet):
-    """Students can read notices. Vendors can create them."""
     queryset = Notice.objects.all().order_by('-created_at')
     serializer_class = NoticeSerializer
 
 
+# ─────────────────────────────────────────
 # 8. SOS Alert ViewSet
+# ─────────────────────────────────────────
 class SOSAlertViewSet(viewsets.ModelViewSet):
-    """Students can create SOS alerts. Vendor can resolve them via Admin."""
     queryset = SOSAlert.objects.all().order_by('-created_at')
     serializer_class = SOSAlertSerializer
 
     def create(self, request, *args, **kwargs):
         user_email = request.data.get('email')
-        message = request.data.get('message', 'Emergency SOS')
-        
+        message = request.data.get('message', 'Emergency SOS Alert')
+
         if not user_email:
             return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
-            
+
         try:
             student = StudentProfile.objects.get(email=user_email)
             alert = SOSAlert.objects.create(student=student, message=message)
@@ -273,43 +315,60 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
             return Response({"error": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
-# 9. Recharge Wallet API (For Vendor)
+# ─────────────────────────────────────────
+# 9. Recharge Wallet (Vendor)
+# ─────────────────────────────────────────
 @api_view(['POST'])
 def recharge_wallet(request):
-    student_id = request.data.get('student_id')
+    """Vendor recharges a student wallet. Body: { "student_id": "...", "amount": 50 }"""
+    student_id = request.data.get('student_id', '').strip()
     amount = request.data.get('amount')
 
     if not student_id or amount is None:
         return Response({"error": "student_id and amount are required"}, status=status.HTTP_400_BAD_REQUEST)
 
-    from decimal import Decimal, InvalidOperation
     try:
         amount = Decimal(str(amount))
         if amount <= 0:
-            return Response({"error": "Amount must be positive"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Amount must be greater than 0"}, status=status.HTTP_400_BAD_REQUEST)
     except (ValueError, InvalidOperation):
-        return Response({"error": "Invalid amount format"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Invalid amount"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        student = StudentProfile.objects.get(student_id=student_id)
-        student.wallet_balance += amount
-        student.save()
+        with transaction.atomic():
+            student = StudentProfile.objects.select_for_update().get(student_id=student_id)
+            student.wallet_balance += amount
+            student.save()  # triggers Firebase sync
+
         return Response({
             "message": "Wallet recharged successfully",
             "student_name": f"{student.first_name} {student.last_name}",
-            "new_balance": student.wallet_balance
+            "student_id": student.student_id,
+            "new_balance": float(student.wallet_balance)
         }, status=status.HTTP_200_OK)
     except StudentProfile.DoesNotExist:
         return Response({"error": "Student with this ID not found"}, status=status.HTTP_404_NOT_FOUND)
 
-# 10. Vendor Dashboard APIs
+
+# ─────────────────────────────────────────
+# 10. Route Suggestions
+# ─────────────────────────────────────────
+@api_view(['GET'])
+def get_route_suggestions(request):
+    boarding = list(Route.objects.values_list('boarding_point', flat=True).distinct())
+    dropping = list(Route.objects.values_list('dropping_point', flat=True).distinct())
+    return Response({'boarding': boarding, 'dropping': dropping})
+
+
+# ─────────────────────────────────────────
+# 11. Vendor Stats
+# ─────────────────────────────────────────
 @api_view(['GET'])
 def vendor_stats(request):
-    today = timezone.now().date()
-    
-    total_tickets_today = Ticket.objects.filter(booked_at__date=today).count()
-    waiting_passengers = Ticket.objects.filter(status='Active', bus_assigned__isnull=True).count()
-    active_fleet = Bus.objects.filter(status='Active').count()
+    today = date.today()
+    total_tickets_today = Ticket.objects.filter(travel_date=today).count()
+    waiting_passengers = Ticket.objects.filter(status='Active', bus_assigned__isnull=True, travel_date=today).count()
+    active_fleet = Bus.objects.filter(status='Active', date=today).count()
     sos_alerts = SOSAlert.objects.filter(status='Pending').count()
 
     return Response({
@@ -319,73 +378,118 @@ def vendor_stats(request):
         "sos_alerts": sos_alerts
     })
 
+
+# ─────────────────────────────────────────
+# 12. Vendor Demand Tracking
+# ─────────────────────────────────────────
 @api_view(['GET'])
 def vendor_demand(request):
-    """Returns routes with active waiting passengers."""
+    """Returns all routes with waiting passenger counts and available vehicles."""
+    today = date.today()
     routes = Route.objects.all()
     demand_data = []
 
     for route in routes:
-        waiting = Ticket.objects.filter(route=route, status='Active', bus_assigned__isnull=True).count()
-        if waiting > 0:
-            demand_data.append({
-                "route_id": route.id,
-                "route_name": route.name,
-                "boarding": route.boarding_point,
-                "dropping": route.dropping_point,
-                "waiting_count": waiting
-            })
+        waiting = Ticket.objects.filter(
+            route=route, status='Active', bus_assigned__isnull=True, travel_date=today
+        ).count()
+        active_buses = Bus.objects.filter(route=route, status='Active', date=today).count()
+        available_vehicles = Vehicle.objects.filter(is_available=True).count()
 
+        demand_data.append({
+            "route_id": route.id,
+            "route_name": route.name,
+            "boarding": route.boarding_point,
+            "dropping": route.dropping_point,
+            "waiting_count": waiting,
+            "active_buses": active_buses,
+            "needs_bus": waiting > 0 and active_buses == 0,
+            "available_vehicles": available_vehicles
+        })
+
+    # Sort: routes needing buses first
+    demand_data.sort(key=lambda x: (-x['waiting_count']))
     return Response(demand_data)
 
-@api_view(['POST'])
+
+# ─────────────────────────────────────────
+# 13. Vendor — Add Checker
+# ─────────────────────────────────────────
+@api_view(['GET', 'POST'])
 def vendor_add_checker(request):
-    """Vendor adds a checker with a specific password."""
-    email = request.data.get('email')
-    password = request.data.get('password')
-    first_name = request.data.get('first_name')
-    last_name = request.data.get('last_name')
-    student_id = request.data.get('student_id')
-    mobile = request.data.get('mobile_number', '')
+    if request.method == 'GET':
+        checkers = StudentProfile.objects.filter(role='Checker').values(
+            'student_id', 'first_name', 'last_name', 'email', 'mobile_number', 'created_at'
+        )
+        return Response(list(checkers))
+
+    # POST — add new checker
+    email = request.data.get('email', '').strip()
+    password = request.data.get('password', '').strip()
+    first_name = request.data.get('first_name', '').strip()
+    last_name = request.data.get('last_name', '').strip()
+    student_id = request.data.get('student_id', '').strip()
+    mobile = request.data.get('mobile_number', '').strip()
 
     if not all([email, password, first_name, last_name, student_id]):
-        return Response({"error": "Missing required fields (email, password, name, id)"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": "email, password, first_name, last_name, student_id are all required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     if StudentProfile.objects.filter(email=email).exists():
         return Response({"error": "A user with this email already exists"}, status=status.HTTP_400_BAD_REQUEST)
 
+    if StudentProfile.objects.filter(student_id=student_id).exists():
+        return Response({"error": "A user with this student_id already exists"}, status=status.HTTP_400_BAD_REQUEST)
+
+    from django.contrib.auth.hashers import make_password
+    hashed_password = make_password(password)
+
     profile = StudentProfile.objects.create(
-        email=email,
-        password=password, # In real app, use make_password
+        student_id=student_id,
         first_name=first_name,
         last_name=last_name,
-        student_id=student_id,
+        email=email,
         mobile_number=mobile,
+        password=hashed_password,
         role='Checker',
-        firebase_uid='STAFF_' + uuid.uuid4().hex[:10]
+        firebase_uid=f"staff_{student_id}_{uuid.uuid4().hex[:6]}"
     )
 
     return Response({
-        "message": "Checker added successfully. They can now login with these credentials.",
-        "checker_id": profile.student_id
+        "message": f"Checker '{first_name} {last_name}' added successfully.",
+        "checker_id": profile.student_id,
+        "email": profile.email
     }, status=status.HTTP_201_CREATED)
 
+
+# ─────────────────────────────────────────
+# 14. Custom Login (Staff/Checker)
+# ─────────────────────────────────────────
 @api_view(['POST'])
 def custom_login(request):
-    """Custom login for Checkers/Staff who don't use Firebase."""
-    email = request.data.get('email')
-    password = request.data.get('password')
+    """Login for Checkers/Staff who don't use Firebase Auth."""
+    email = request.data.get('email', '').strip()
+    password = request.data.get('password', '').strip()
+
+    if not email or not password:
+        return Response({"error": "Email and password are required"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
+        from django.contrib.auth.hashers import check_password as django_check_password
         student = StudentProfile.objects.get(email=email)
-        if student.password == password:
+
+        if student.password and django_check_password(password, student.password):
             return Response({
-                "message": "Login Successful",
+                "message": "Login successful",
                 "email": student.email,
                 "role": student.role,
-                "first_name": student.first_name
+                "first_name": student.first_name,
+                "last_name": student.last_name,
+                "student_id": student.student_id
             }, status=status.HTTP_200_OK)
         else:
-            return Response({"error": "Invalid password"}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({"error": "Invalid email or password"}, status=status.HTTP_401_UNAUTHORIZED)
     except StudentProfile.DoesNotExist:
-        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"error": "No account found with this email"}, status=status.HTTP_404_NOT_FOUND)

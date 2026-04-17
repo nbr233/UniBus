@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../constants.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -12,10 +12,10 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  List<dynamic> _historyTickets = [];
+  final _user = FirebaseAuth.instance.currentUser;
+  List<dynamic> _tickets = [];
   bool _isLoading = true;
-
-  final String _ticketUrl = AppConfig.ticketsUrl;
+  String? _error;
 
   @override
   void initState() {
@@ -24,142 +24,209 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _fetchHistory() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final String userEmail = user.email!;
+    if (_user?.email == null) return;
+    setState(() { _isLoading = true; _error = null; });
 
     try {
-      final response = await http.get(
-        Uri.parse('$_ticketUrl?student_id=${Uri.encodeComponent(userEmail)}&history=true'),
-      ).timeout(AppConfig.requestTimeout);
-      
+      final url = Uri.parse(
+        '${AppConfig.ticketsUrl}?student_id=${Uri.encodeComponent(_user!.email!)}&history=true',
+      );
+      final response = await http.get(url).timeout(AppConfig.requestTimeout);
+
       if (response.statusCode == 200) {
-        setState(() {
-          _historyTickets = jsonDecode(response.body);
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _tickets = jsonDecode(response.body);
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() { _isLoading = false; _error = "Failed to load history"; });
       }
     } catch (e) {
-      debugPrint("History fetching error: $e");
-      setState(() => _isLoading = false);
+      if (mounted) setState(() { _isLoading = false; _error = "Network error"; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text("Journey History", style: TextStyle(fontWeight: FontWeight.bold)),
-        centerTitle: true,
+        title: const Text("Ticket History", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
         elevation: 0,
-        foregroundColor: Colors.black87,
+        actions: [
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchHistory),
+        ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF69AD8E)))
-          : _historyTickets.isEmpty
-              ? _buildEmptyState()
-              : ListView.builder(
-                  padding: const EdgeInsets.all(20),
-                  itemCount: _historyTickets.length,
-                  itemBuilder: (context, index) {
-                    return _buildHistoryCard(_historyTickets[index]);
-                  },
-                ),
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF52B788)))
+          : _error != null
+              ? Center(child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.error_outline, color: Colors.grey[400], size: 48),
+                    const SizedBox(height: 12),
+                    Text(_error!, style: const TextStyle(color: Colors.grey)),
+                    const SizedBox(height: 12),
+                    ElevatedButton(onPressed: _fetchHistory, child: const Text("Retry")),
+                  ],
+                ))
+              : _tickets.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.history, size: 64, color: Colors.grey[300]),
+                          const SizedBox(height: 12),
+                          const Text("No ticket history", style: TextStyle(color: Colors.grey, fontSize: 16)),
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _fetchHistory,
+                      color: const Color(0xFF52B788),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _tickets.length,
+                        itemBuilder: (ctx, i) => _TicketHistoryCard(ticket: _tickets[i]),
+                      ),
+                    ),
     );
   }
+}
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.history_outlined, size: 80, color: Colors.grey.withValues(alpha: 0.5)),
-          const SizedBox(height: 10),
-          const Text("No past journeys found.", style: TextStyle(color: Colors.grey, fontSize: 16)),
-        ],
-      ),
-    );
-  }
+class _TicketHistoryCard extends StatelessWidget {
+  final Map<String, dynamic> ticket;
+  const _TicketHistoryCard({required this.ticket});
 
-  Widget _buildHistoryCard(Map<String, dynamic> ticket) {
-    final route = ticket['route_details'] as Map<String, dynamic>? ?? {};
-    final bus = ticket['bus_details'] as Map<String, dynamic>?;
-    DateTime bookedDate = DateTime.parse(ticket['booked_at']);
-    String formattedDate = "${bookedDate.day}/${bookedDate.month}/${bookedDate.year}";
+  @override
+  Widget build(BuildContext context) {
+    final routeDetails = ticket['route_details'];
+    final busDetails = ticket['bus_details'];
+    final isUsed = ticket['status'] == 'Used';
+    final isActive = ticket['status'] == 'Active';
+
+    final statusColor = isUsed
+        ? Colors.green
+        : isActive
+            ? const Color(0xFF52B788)
+            : Colors.grey;
+
+    final bookedAt = ticket['booked_at'] != null
+        ? DateTime.tryParse(ticket['booked_at'])
+        : null;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 15),
-      padding: const EdgeInsets.all(15),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
       ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                route['name'] ?? "Route",
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  ticket['status'] ?? 'Used',
-                  style: TextStyle(
-                    fontSize: 10, 
-                    color: Colors.grey.shade600, 
-                    fontWeight: FontWeight.bold
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    routeDetails?['name'] ?? "Unknown Route",
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    ticket['status'] ?? "—",
+                    style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (routeDetails != null)
+              Text(
+                "${routeDetails['boarding_point']} → ${routeDetails['dropping_point']}",
+                style: const TextStyle(color: Colors.grey, fontSize: 13),
               ),
-            ],
-          ),
-          const Divider(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("POINTS", style: TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
-                  Text("${route['boarding_point']} → ${route['dropping_point']}", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text("DATE", style: TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
-                  Text(formattedDate, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text("Bus: ${bus != null ? (bus['bus_number'] ?? 'N/A') : 'N/A'}", style: const TextStyle(fontSize: 11, color: Colors.black54)),
-              Text("ID: ${ticket['booking_id']}", style: const TextStyle(fontSize: 11, color: Colors.black54, fontStyle: FontStyle.italic)),
-            ],
-          ),
-        ],
+            const Divider(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _DetailItem(
+                    icon: Icons.confirmation_number_outlined,
+                    label: "Booking ID",
+                    value: ticket['booking_id'] ?? "—",
+                  ),
+                ),
+                if (busDetails != null)
+                  Expanded(
+                    child: _DetailItem(
+                      icon: Icons.directions_bus_outlined,
+                      label: "Bus Code",
+                      value: busDetails['bus_id_code'] ?? "—",
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _DetailItem(
+                    icon: Icons.calendar_today_outlined,
+                    label: "Travel Date",
+                    value: ticket['travel_date'] ?? "—",
+                  ),
+                ),
+                if (bookedAt != null)
+                  Expanded(
+                    child: _DetailItem(
+                      icon: Icons.access_time_outlined,
+                      label: "Booked At",
+                      value: "${bookedAt.hour.toString().padLeft(2, '0')}:${bookedAt.minute.toString().padLeft(2, '0')}",
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _DetailItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _DetailItem({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: Colors.grey),
+        const SizedBox(width: 4),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ],
     );
   }
 }

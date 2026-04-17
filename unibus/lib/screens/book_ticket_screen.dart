@@ -191,6 +191,19 @@ class _BookTicketScreenState extends State<BookTicketScreen> {
                     color: Colors.grey,
                   ),
                 ),
+                if (route['schedule_time'] != null) ...[
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      const Icon(Icons.access_time, size: 14, color: Color(0xFF69AD8E)),
+                      const SizedBox(width: 5),
+                      Text(
+                        "Schedule: ${route['schedule_time']}",
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

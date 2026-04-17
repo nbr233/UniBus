@@ -5,14 +5,26 @@ from .models import StudentProfile, Route, Vehicle, Bus, Ticket, Notice, SOSAler
 class StudentProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentProfile
-        # firebase_uid is intentionally excluded — should not be exposed to clients
-        fields = ['id', 'student_id', 'first_name', 'last_name', 'mobile_number', 'email', 'role', 'wallet_balance', 'profile_picture', 'created_at']
+        # firebase_uid and password intentionally excluded
+        fields = [
+            'id', 'student_id', 'first_name', 'last_name',
+            'mobile_number', 'email', 'role', 'wallet_balance',
+            'profile_picture', 'created_at'
+        ]
+        read_only_fields = ['created_at']
 
 
 class RouteSerializer(serializers.ModelSerializer):
+    schedule_time_display = serializers.SerializerMethodField()
+
     class Meta:
         model = Route
         fields = '__all__'
+
+    def get_schedule_time_display(self, obj):
+        if obj.schedule_time:
+            return obj.schedule_time.strftime("%I:%M %p")
+        return "Flexible"
 
 
 class VehicleSerializer(serializers.ModelSerializer):
@@ -38,29 +50,37 @@ class NoticeSerializer(serializers.ModelSerializer):
 
 
 class SOSAlertSerializer(serializers.ModelSerializer):
-    student_id = serializers.CharField(source='student.student_id', read_only=True)
+    student_name = serializers.SerializerMethodField()
+    student_id_display = serializers.CharField(source='student.student_id', read_only=True)
 
     class Meta:
         model = SOSAlert
         fields = '__all__'
 
+    def get_student_name(self, obj):
+        return f"{obj.student.first_name} {obj.student.last_name}"
+
 
 class TicketSerializer(serializers.ModelSerializer):
     route_details = RouteSerializer(source='route', read_only=True)
     bus_details = BusSerializer(source='bus_assigned', read_only=True)
-    is_active = serializers.ReadOnlyField()
+    student_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Ticket
         fields = [
             'id',
             'user',
+            'student_name',
             'route',
             'route_details',
             'bus_assigned',
             'bus_details',
             'booking_id',
-            'booked_at',
             'status',
-            'is_active',
+            'travel_date',
+            'booked_at',
         ]
+
+    def get_student_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}"

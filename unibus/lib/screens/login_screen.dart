@@ -100,7 +100,10 @@ class _LoginScreenState extends State<LoginScreen> {
             if (role == 'Checker') {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (context) => const CheckerDashboardScreen()),
+                MaterialPageRoute(builder: (context) => CheckerDashboardScreen(
+                  checkerName: data['first_name'] ?? "Checker",
+                  checkerEmail: data['email'] ?? email,
+                )),
               );
             } else {
               Navigator.pushReplacement(

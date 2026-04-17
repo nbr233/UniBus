@@ -25,10 +25,11 @@ android {
         // তোমার Firebase কনসোলে দেওয়া অ্যাপ্লিকেশন আইডি
         applicationId = "com.reachad.unibus" 
         
-        minSdk = flutter.minSdkVersion // Firebase এর জন্য 23 রাখা নিরাপদ
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        multiDexEnabled = true
     }
 
     buildTypes {
