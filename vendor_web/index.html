@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UniBus Vendor Panel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>UniBus <span class="vendor-tag">Vendor</span></h2>
+            </div>
+            <nav class="nav-menu">
+                <button class="nav-item active" data-target="dashboard">
+                    <span class="icon">📊</span> Dashboard
+                </button>
+                <button class="nav-item" data-target="demand">
+                    <span class="icon">📈</span> Demand Tracking
+                </button>
+                <button class="nav-item" data-target="vehicles">
+                    <span class="icon">🚐</span> Vehicles
+                </button>
+                <button class="nav-item" data-target="routes">
+                    <span class="icon">🛣️</span> Manage Routes
+                </button>
+                <button class="nav-item" data-target="recharge">
+                    <span class="icon">💰</span> Wallet Recharge
+                </button>
+                <button class="nav-item" data-target="staff">
+                    <span class="icon">👥</span> Manage Staff
+                </button>
+                <button class="nav-item" data-target="notices">
+                    <span class="icon">📢</span> Send Notice
+                </button>
+                <button class="nav-item" data-target="sos">
+                    <span class="icon">🚨</span> SOS Alerts
+                </button>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <h1 id="page-title">Vendor Dashboard</h1>
+            </header>
+
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="content-section active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-label">Total Tickets Today</span>
+                        <h2 id="stat-tickets">0</h2>
+                    </div>
+                    <div class="stat-card alert">
+                        <span class="stat-label">Waiting Passengers</span>
+                        <h2 id="stat-waiting">0</h2>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Active Fleet</span>
+                        <h2 id="stat-fleet">0</h2>
+                    </div>
+                    <div class="stat-card warning">
+                        <span class="stat-label">SOS Alerts</span>
+                        <h2 id="stat-sos">0</h2>
+                    </div>
+                </div>
+                <div class="welcome-card mt-20">
+                    <h2>Welcome to the Vendor Panel!</h2>
+                    <p>Real-time demand tracking and fleet management system.</p>
+                </div>
+            </section>
+
+            <!-- Demand Tracking Section -->
+            <section id="demand" class="content-section">
+                <div class="card">
+                    <h2>Demand Tracking (Real-time)</h2>
+                    <p class="mb-10">See which routes have the most waiting passengers.</p>
+                    <div class="table-container">
+                        <table id="demand-table">
+                            <thead>
+                                <tr>
+                                    <th>Route</th>
+                                    <th>Waiting Passengers</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Dispatch Bus Modal (Implicit in card) -->
+                <div id="dispatch-container" class="card mt-20" style="display: none;">
+                    <h2>Dispatch Bus for <span id="dispatch-route-name"></span></h2>
+                    <form id="dispatch-form">
+                        <input type="hidden" id="dispatch-route-id">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Select Vehicle</label>
+                                <select id="dispatch-vehicle-id" required>
+                                    <option value="">-- Select a Bus --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Bus Capacity (Seats)</label>
+                                <input type="number" id="dispatch-capacity" value="40" min="1" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn primary">Dispatch & Generate Checker ID</button>
+                    </form>
+                    <div id="dispatch-msg" class="message"></div>
+                </div>
+
+                <div class="card mt-20">
+                    <h2>Live/Active Trips</h2>
+                    <div class="table-container">
+                        <table id="active-trips-table">
+                            <thead>
+                                <tr>
+                                    <th>Bus ID</th>
+                                    <th>Route</th>
+                                    <th>Bus Number</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vehicles Section -->
+            <section id="vehicles" class="content-section">
+                <div class="card">
+                    <h2>Add New Vehicle (Bus)</h2>
+                    <form id="vehicle-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Bus Name/Label</label>
+                                <input type="text" id="vehicle-name" placeholder="e.g., Bus A" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Bus Number</label>
+                                <input type="text" id="vehicle-number" placeholder="e.g., Dhaka Metro-Ga 11-2233" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn primary">Add Vehicle</button>
+                    </form>
+                    <div id="vehicle-msg" class="message"></div>
+                </div>
+
+                <div class="card mt-20">
+                    <h2>Fleet List</h2>
+                    <div class="table-container">
+                        <table id="vehicles-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Bus Number</th>
+                                    <th>Seats</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Manage Routes Section -->
+            <section id="routes" class="content-section">
+                <div class="card">
+                    <h2>Define New Route</h2>
+                    <form id="route-form">
+                        <div class="form-group">
+                            <label>Route Name</label>
+                            <input type="text" id="route-name" placeholder="e.g., Mirpur to Campus" required>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Boarding Point</label>
+                                <input type="text" id="boarding-point" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Dropping Point</label>
+                                <input type="text" id="dropping-point" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Schedule Time (Default)</label>
+                                <input type="time" id="route-time">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Fare (৳)</label>
+                            <input type="number" id="fare" value="10.00" step="0.01" required>
+                        </div>
+                        <button type="submit" class="btn primary">Create Route</button>
+                    </form>
+                    <div id="route-msg" class="message"></div>
+                </div>
+
+                <div class="card mt-20">
+                    <h2>Existing Routes</h2>
+                    <div class="table-container">
+                        <table id="routes-list-table">
+                            <thead>
+                                <tr>
+                                    <th>Route</th>
+                                    <th>Points</th>
+                                    <th>Time</th>
+                                    <th>Fare</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Wallet Recharge Section -->
+            <section id="recharge" class="content-section">
+                <div class="card">
+                    <h2>Recharge Student Wallet</h2>
+                    <form id="recharge-form">
+                        <div class="form-group">
+                            <label>Student ID</label>
+                            <input type="text" id="recharge-student-id" placeholder="e.g., 201-15-12345" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Amount (৳)</label>
+                            <input type="number" id="recharge-amount" placeholder="50.00" min="1" step="0.01" required>
+                        </div>
+                        <button type="submit" class="btn primary">Recharge Wallet</button>
+                    </form>
+                    <div id="recharge-msg" class="message"></div>
+                </div>
+            </section>
+
+            <!-- Manage Staff Section -->
+            <section id="staff" class="content-section">
+                <div class="card">
+                    <h2>Add Ticket Checker</h2>
+                    <form id="checker-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>First Name</label>
+                                <input type="text" id="staff-first-name" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Last Name</label>
+                                <input type="text" id="staff-last-name" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Checker Email (For login)</label>
+                                <input type="email" id="staff-email" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Password</label>
+                                <input type="password" id="staff-password" placeholder="Set password" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Employee ID</label>
+                                <input type="text" id="staff-id" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn primary">Register Checker</button>
+                    </form>
+                    <div id="staff-msg" class="message"></div>
+                </div>
+
+                <div class="card mt-20">
+                    <h2>Existing Staff (Checkers)</h2>
+                    <div class="table-container">
+                        <table id="staff-list-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Employee ID</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Notices Section -->
+            <section id="notices" class="content-section">
+                <div class="card">
+                    <h2>Send Broadcast Notice</h2>
+                    <form id="notice-form">
+                        <div class="form-group">
+                            <label>Title</label>
+                            <input type="text" id="notice-title" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Message</label>
+                            <textarea id="notice-message" rows="4" required></textarea>
+                        </div>
+                        <button type="submit" class="btn primary">Send Notice</button>
+                    </form>
+                    <div id="notice-msg" class="message"></div>
+                </div>
+            </section>
+
+            <!-- SOS Alerts Section -->
+            <section id="sos" class="content-section">
+                <div class="card">
+                    <h2>SOS Emergency Alerts</h2>
+                    <button class="btn secondary mb-10" onclick="fetchSOS()">Refresh Alerts</button>
+                    <div class="table-container">
+                        <table id="sos-table">
+                            <thead>
+                                <tr>
+                                    <th>Student ID</th>
+                                    <th>Message</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

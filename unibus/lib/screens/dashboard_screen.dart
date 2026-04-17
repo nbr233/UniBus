@@ -1,23 +1,101 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'ticket_option_screen.dart'; 
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'ticket_option_screen.dart';
 import 'book_ticket_screen.dart';
 import 'my_tickets_screen.dart';
 import 'history_screen.dart';
-import 'profile_screen.dart'; 
+import 'profile_screen.dart';
+import 'notice_screen.dart';
+import 'schedule_screen.dart';
+import '../constants.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
   @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final user = FirebaseAuth.instance.currentUser;
+  String _firstName = "Student";
+  String _walletBalance = "0.00";
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfile();
+  }
+
+  Future<void> _fetchProfile() async {
+    if (user?.email == null) return;
+    try {
+      final response = await http.get(
+        Uri.parse('${AppConfig.profilesUrl}${user!.email}/'),
+      ).timeout(AppConfig.requestTimeout);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            _firstName = data['first_name'] ?? "Student";
+            _walletBalance = data['wallet_balance'] ?? "0.00";
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _sendSOS() async {
+    if (user?.email == null) return;
+    
+    // Show sending snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Sending SOS Alert..."), backgroundColor: Colors.orange),
+    );
+
+    try {
+      final response = await http.post(
+        Uri.parse(AppConfig.sosUrl),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"email": user!.email, "message": "Emergency SOS from app"}),
+      ).timeout(AppConfig.requestTimeout);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("SOS Alert Sent Successfully!"), backgroundColor: Colors.red),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Failed to send SOS"), backgroundColor: Colors.redAccent),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Network error sending SOS"), backgroundColor: Colors.redAccent),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
         children: [
-          // Upper Header Section
+          // --- Header Section ---
           Container(
             height: MediaQuery.of(context).size.height * 0.40,
             width: double.infinity,
@@ -41,7 +119,7 @@ class DashboardScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 15),
                   Text(
-                    "Welcome, ${user?.email?.split('@')[0] ?? 'Student'}",
+                    _isLoading ? "Welcome..." : "Welcome, $_firstName",
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -50,36 +128,50 @@ class DashboardScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 50),
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          "Credit Balance:",
-                          style: TextStyle(fontSize: 14, color: Colors.black87),
-                        ),
-                        Text(
-                          "৳ 50.00",
-                          style: TextStyle(
-                            fontSize: 18, 
-                            fontWeight: FontWeight.bold, 
-                            color: Color(0xFF69AD8E),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() => _isLoading = true);
+                      _fetchProfile();
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 50),
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(15),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                "Credit Balance:",
+                                style: TextStyle(fontSize: 14, color: Colors.black87),
+                              ),
+                              const SizedBox(width: 5),
+                              Icon(Icons.refresh, size: 14, color: Colors.grey.withValues(alpha: 0.5)),
+                            ],
+                          ),
+                          _isLoading 
+                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          : Text(
+                            "৳ $_walletBalance",
+                            style: const TextStyle(
+                              fontSize: 18, 
+                              fontWeight: FontWeight.bold, 
+                              color: Color(0xFF69AD8E),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -87,8 +179,8 @@ class DashboardScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 30),
-          
-          // Menu Grid
+
+          // --- Menu Grid ---
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -103,8 +195,13 @@ class DashboardScreen extends StatelessWidget {
                       MaterialPageRoute(builder: (context) => const TicketOptionScreen()), 
                     );
                   }),
-                  
-                  _buildMenuItem(context, Icons.access_time, "Schedule"),
+
+                  _buildMenuItem(context, Icons.access_time, "Schedule", onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ScheduleScreen()),
+                    );
+                  }),
                   
                   _buildMenuItem(context, Icons.history_rounded, "History", onTap: () {
                     Navigator.push(
@@ -113,10 +210,23 @@ class DashboardScreen extends StatelessWidget {
                     );
                   }),
                   
-                  _buildMenuItem(context, Icons.notifications_none, "Notice"),
-                  _buildMenuItem(context, Icons.sensors_outlined, "SOS", isSOS: true),
-                  _buildMenuItem(context, Icons.location_on_outlined, "Live Tracking"),
-                ], // এই ব্র্যাকেটটি (]) ঠিকভাবে ক্লোজ করা হয়েছে
+                  _buildMenuItem(context, Icons.notifications_none, "Notice", onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const NoticeScreen()),
+                    );
+                  }),
+                  _buildMenuItem(context, Icons.sensors_outlined, "SOS", isSOS: true, onTap: _sendSOS),
+                  _buildMenuItem(context, Icons.location_on_outlined, "Live Tracking", onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("📍 Live Tracking শীঘ্রই আসছে!"),
+                        backgroundColor: Color(0xFF69AD8E),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }),
+                ], 
               ),
             ),
           ),

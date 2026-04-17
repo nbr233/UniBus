@@ -3,6 +3,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../constants.dart';
 
 class MyTicketsScreen extends StatefulWidget {
   const MyTicketsScreen({super.key});
@@ -17,7 +18,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
   List<dynamic> _activeTickets = [];
   bool _isLoading = true;
 
-  final String _ticketUrl = 'http://192.168.0.103:8000/api/tickets/';
+  final String _ticketUrl = AppConfig.ticketsUrl;
 
   @override
   void initState() {
@@ -29,15 +30,12 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // ✅ FIX: full email পাঠাও — Django সেটা দিয়ে StudentProfile খুঁজবে
-    // আগে: user.email!.split('@')[0]  → শুধু prefix যেমন "reachad22205101708"
-    // এখন: user.email!               → পুরো email যেমন "reachad22205101708@diu.edu.bd"
     final String userEmail = user.email!;
 
     try {
       final response = await http.get(
         Uri.parse('$_ticketUrl?student_id=${Uri.encodeComponent(userEmail)}&history=false'),
-      );
+      ).timeout(AppConfig.requestTimeout);
 
       if (response.statusCode == 200) {
         setState(() {
@@ -45,11 +43,9 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
           _isLoading = false;
         });
       } else {
-        debugPrint("Ticket fetch error: ${response.statusCode} ${response.body}");
         setState(() => _isLoading = false);
       }
     } catch (e) {
-      debugPrint("Error fetching tickets: $e");
       setState(() => _isLoading = false);
     }
   }
@@ -59,12 +55,6 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        leading: _isQRFullView
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.black87),
-                onPressed: () => Navigator.pop(context),
-              ),
         title: _isQRFullView
             ? null
             : const Text(
@@ -123,8 +113,8 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
   }
 
   Widget _buildTicketCard(Map<String, dynamic> ticket) {
-    // bus_details null হতে পারে যদি bus delete হয়
-    final bus = ticket['bus_details'] as Map<String, dynamic>? ?? {};
+    final route = ticket['route_details'] as Map<String, dynamic>? ?? {};
+    final bus = ticket['bus_details'] as Map<String, dynamic>?;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -143,7 +133,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      bus["name"] ?? "Not Assigned",
+                      route["name"] ?? "Route",
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -152,7 +142,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      bus["route"] ?? "Route",
+                      "${route['boarding_point']} → ${route['dropping_point']}",
                       style: const TextStyle(fontSize: 12, color: Colors.white70),
                     ),
                   ],
@@ -160,9 +150,9 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                bus["formatted_time"] ?? "--",
+                bus != null ? (bus["formatted_time"] ?? "--") : (route["schedule_time"] ?? "Flexible"),
                 style: const TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                 ),
@@ -177,7 +167,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    "BUS NUMBER",
+                    "BUS ASSIGNMENT",
                     style: TextStyle(
                       fontSize: 10,
                       color: Colors.white70,
@@ -185,28 +175,21 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                     ),
                   ),
                   Text(
-                    bus["bus_number"] ?? "TBA",
-                    style: const TextStyle(
+                    bus != null ? (bus["bus_number"] ?? "Assigned") : "Awaiting Assignment",
+                    style: TextStyle(
                       fontSize: 14,
-                      color: Colors.white,
+                      color: bus != null ? Colors.white : Colors.white70,
                       fontWeight: FontWeight.bold,
+                      fontStyle: bus != null ? FontStyle.normal : FontStyle.italic,
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    "BOARDING POINT",
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.white70,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
                   Text(
-                    bus["boarding_point"] ?? "--",
+                    "Booking ID: ${ticket['booking_id']}",
                     style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
+                      color: Colors.white60,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 10,
                     ),
                   ),
                 ],

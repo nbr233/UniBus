@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../constants.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -14,7 +15,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   List<dynamic> _historyTickets = [];
   bool _isLoading = true;
 
-  final String _ticketUrl = 'http://192.168.0.103:8000/api/tickets/';
+  final String _ticketUrl = AppConfig.ticketsUrl;
 
   @override
   void initState() {
@@ -25,10 +26,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Future<void> _fetchHistory() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    String studentId = user.email!.split('@')[0];
+    final String userEmail = user.email!;
 
     try {
-      final response = await http.get(Uri.parse('$_ticketUrl?student_id=$studentId&history=true'));
+      final response = await http.get(
+        Uri.parse('$_ticketUrl?student_id=${Uri.encodeComponent(userEmail)}&history=true'),
+      ).timeout(AppConfig.requestTimeout);
       
       if (response.statusCode == 200) {
         setState(() {
@@ -72,7 +75,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // updated: withValues(alpha: 0.5)
           Icon(Icons.history_outlined, size: 80, color: Colors.grey.withValues(alpha: 0.5)),
           const SizedBox(height: 10),
           const Text("No past journeys found.", style: TextStyle(color: Colors.grey, fontSize: 16)),
@@ -82,7 +84,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildHistoryCard(Map<String, dynamic> ticket) {
-    var bus = ticket['bus_details'];
+    final route = ticket['route_details'] as Map<String, dynamic>? ?? {};
+    final bus = ticket['bus_details'] as Map<String, dynamic>?;
     DateTime bookedDate = DateTime.parse(ticket['booked_at']);
     String formattedDate = "${bookedDate.day}/${bookedDate.month}/${bookedDate.year}";
 
@@ -95,7 +98,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            // updated: withValues(alpha: 0.03)
             color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 5),
@@ -108,18 +110,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                bus['name'] ?? "Bus Not Assigned",
+                route['name'] ?? "Route",
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: Colors.grey.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  "Completed",
-                  style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontWeight: FontWeight.bold),
+                  ticket['status'] ?? 'Used',
+                  style: TextStyle(
+                    fontSize: 10, 
+                    color: Colors.grey.shade600, 
+                    fontWeight: FontWeight.bold
+                  ),
                 ),
               ),
             ],
@@ -131,8 +137,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("ROUTE", style: TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
-                  Text("${bus['boarding_point']} → ${bus['dropping_point']}", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Text("POINTS", style: TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
+                  Text("${route['boarding_point']} → ${route['dropping_point']}", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 ],
               ),
               Column(
@@ -148,7 +154,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Bus No: ${bus['bus_number'] ?? 'N/A'}", style: const TextStyle(fontSize: 11, color: Colors.black54)),
+              Text("Bus: ${bus != null ? (bus['bus_number'] ?? 'N/A') : 'N/A'}", style: const TextStyle(fontSize: 11, color: Colors.black54)),
               Text("ID: ${ticket['booking_id']}", style: const TextStyle(fontSize: 11, color: Colors.black54, fontStyle: FontStyle.italic)),
             ],
           ),

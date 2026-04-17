@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http; // এখন এটি ব্যবহৃত হবে
-import 'dart:convert'; // এখন এটি ব্যবহৃত হবে
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../constants.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -12,9 +13,9 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final user = FirebaseAuth.instance.currentUser;
-  bool _isLoading = false; // ওয়ার্নিং ফিক্স করার জন্য এটি লোডিং এ ব্যবহৃত হবে
+  bool _isLoading = false;
 
-  // জ্যাঙ্গোতে প্রোফাইল আপডেট করার ফাংশন
+  // Updates the student's first name in the Django backend
   Future<void> _updateProfile(String newName) async {
     if (user?.email == null) return;
 
@@ -22,13 +23,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       final response = await http.patch(
-        Uri.parse('http://192.168.0.103:8000/api/profiles/${user!.email}/'),
+        Uri.parse('${AppConfig.profilesUrl}${user!.email}/'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"first_name": newName}),
-      );
+      ).timeout(AppConfig.requestTimeout);
 
       if (response.statusCode == 200) {
-        // ফায়ারবেস ডিসপ্লে নেম আপডেট (ঐচ্ছিক)
+        // Optionally update Firebase display name as well
         await user!.updateDisplayName(newName);
         if (mounted) _showSnackBar("Profile updated successfully!", Colors.green);
       } else {

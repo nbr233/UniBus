@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dashboard_screen.dart'; // নিশ্চিত করো ফাইলের নাম dashboard_screen.dart
-import 'signup_screen.dart'; 
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dashboard_screen.dart';
+import 'checker_dashboard_screen.dart';
+import 'signup_screen.dart';
+import '../constants.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -27,23 +31,93 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Firebase Authentication দিয়ে লগইন
+      // Sign in using Firebase Authentication
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
 
       if (mounted) {
-        _showMessage("Login Successful!", Colors.green);
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const DashboardScreen()),
-        );
+        _showMessage("Login Successful! Fetching profile...", Colors.green);
+        
+        // Fetch role from Django backend
+        try {
+          final response = await http.get(
+            Uri.parse('${AppConfig.profilesUrl}$email/'),
+          ).timeout(AppConfig.requestTimeout);
+
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            final role = data['role'] ?? 'Student';
+            
+            if (role == 'Checker') {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const CheckerDashboardScreen()),
+              );
+            } else if (role == 'Vendor') {
+              _showMessage("Vendor should use the Web Panel", Colors.orange);
+              // Or navigate to a specific Vendor app screen
+            } else {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const DashboardScreen()),
+              );
+            }
+          } else {
+            // Default to student if backend profile not found (might happen if sync failed)
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const DashboardScreen()),
+            );
+          }
+        } catch (e) {
+          // If backend fetch fails, default to Student Dashboard
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const DashboardScreen()),
+          );
+        }
       }
     } on FirebaseAuthException catch (e) {
+      // If Firebase login fails, try the Custom Backend Login (for Staff/Checkers)
+      try {
+        final customResponse = await http.post(
+          Uri.parse(AppConfig.loginUrl),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({
+            "email": email,
+            "password": password,
+          }),
+        ).timeout(AppConfig.requestTimeout);
+
+        if (customResponse.statusCode == 200) {
+          final data = jsonDecode(customResponse.body);
+          final role = data['role'];
+          
+          if (mounted) {
+            _showMessage("Staff Login Successful!", Colors.green);
+            if (role == 'Checker') {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const CheckerDashboardScreen()),
+              );
+            } else {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const DashboardScreen()),
+              );
+            }
+          }
+          return;
+        }
+      } catch (backendError) {
+        debugPrint("Backend login attempt failed: $backendError");
+      }
+
       String errorMessage = "Login failed";
       if (e.code == 'user-not-found') {
-        errorMessage = "No user found for that email.";
+        errorMessage = "User not found. If you are a student, please sign up.";
       } else if (e.code == 'wrong-password') {
         errorMessage = "Wrong password provided.";
       } else {

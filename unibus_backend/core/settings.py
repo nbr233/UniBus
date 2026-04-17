@@ -1,17 +1,23 @@
 import os
+import dj_database_url
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-1_qhb)tf8y(*_8tvjh5!se4vvk)f=y#z9xs3x+-5suhx_7vp2+'
+# Store this in a .env file and never commit it to version control
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-1_qhb)tf8y(*_8tvjh5!se4vvk)f=y#z9xs3x+-5suhx_7vp2+')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Fixed: 'True' == 'True' correctly enables debug mode when env var is set to 'True'
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-# Allows all hosts during development (e.g., local IP or localhost)
+# Allow all hosts during development; add Render hostname in production
 ALLOWED_HOSTS = ['*']
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 # Application definition
 INSTALLED_APPS = [
@@ -21,18 +27,19 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+
     # Third-party libraries
-    'rest_framework',      # Django Rest Framework for building APIs
-    'corsheaders',         # Handling Cross-Origin Resource Sharing (CORS)
-    
+    'rest_framework',
+    'corsheaders',
+
     # Custom apps
-    'api',                 # Your API app for Student Profiles
+    'api',
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # Must be at the top to handle CORS requests
+    'corsheaders.middleware.CorsMiddleware',  # Must be before CommonMiddleware
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Required for serving static files on Render
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -41,8 +48,13 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# Enable CORS for Flutter: Allows the app to connect from any origin
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS control: allow all origins in development, restrict in production
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOWED_ORIGINS = [
+        os.environ.get('FRONTEND_ORIGIN', 'https://yourdomain.com'),
+    ]
 
 ROOT_URLCONF = 'core.urls'
 
@@ -64,19 +76,16 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'core.wsgi.application'
 
-# Database Setup: Connecting Django to PostgreSQL
+# Database: dynamic config supporting both local and Render PostgreSQL
+# Uses DATABASE_URL env var on Render, falls back to local database
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'unibus_db',
-        'USER': 'postgres',
-        'PASSWORD': 'admin',  # Ensure this matches your pgAdmin password
-        'HOST': '127.0.0.1',
-        'PORT': '5432',
-    }
+    'default': dj_database_url.config(
+        default=os.environ.get('DATABASE_URL', 'postgresql://unibus_db_user:F8i46buIgccUtzxcGnjsTl4XOgWPPCxt@dpg-d7h1cnugvqtc73errqe0-a.ohio-postgres.render.com/unibus_db'),
+        conn_max_age=600
+    )
 }
 
-# Standard Password Validators
+# Standard password validators
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',},
@@ -84,14 +93,18 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',},
 ]
 
-# Internationalization and Localization
+# Internationalization settings
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
+# Static files configuration for production (Render)
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# Default primary key field type for models
+# Whitenoise: serve and compress static files efficiently
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

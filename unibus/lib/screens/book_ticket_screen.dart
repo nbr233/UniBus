@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../constants.dart';
 
 class BookTicketScreen extends StatefulWidget {
   const BookTicketScreen({super.key});
@@ -11,84 +12,40 @@ class BookTicketScreen extends StatefulWidget {
 }
 
 class _BookTicketScreenState extends State<BookTicketScreen> {
-  final TextEditingController _boardingController = TextEditingController();
-  final TextEditingController _droppingController = TextEditingController();
+  bool _isLoading = true;
+  List<dynamic> _routeList = [];
 
-  bool _isSearched = false;
-  bool _isLoading = false;
-  List<dynamic> _busList = [];
-  List<String> _boardingSuggestions = [];
-  List<String> _droppingSuggestions = [];
-
-  final String _baseUrl = 'http://192.168.0.103:8000/api/buses/';
-  final String _ticketUrl = 'http://192.168.0.103:8000/api/tickets/';
-  final String _suggestionUrl = 'http://192.168.0.103:8000/api/suggestions/';
+  final String _routesUrl = AppConfig.routesUrl;
+  final String _ticketUrl = AppConfig.ticketsUrl;
 
   @override
   void initState() {
     super.initState();
-    _fetchSuggestions();
+    _fetchRoutes();
   }
 
-  @override
-  void dispose() {
-    _boardingController.dispose();
-    _droppingController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _fetchSuggestions() async {
+  Future<void> _fetchRoutes() async {
     try {
-      final response = await http.get(Uri.parse(_suggestionUrl));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          _boardingSuggestions = List<String>.from(data['boarding']);
-          _droppingSuggestions = List<String>.from(data['dropping']);
-        });
-      }
-    } catch (e) {
-      debugPrint("Suggestion fetching error: $e");
-    }
-  }
-
-  Future<void> _handleSearch() async {
-    FocusScope.of(context).unfocus();
-    if (_boardingController.text.isEmpty || _droppingController.text.isEmpty) {
-      _showSnackBar('Please enter both boarding and dropping points', Colors.redAccent);
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _isSearched = true;
-    });
-
-    try {
-      final url = Uri.parse(
-        '$_baseUrl?boarding=${Uri.encodeComponent(_boardingController.text)}'
-        '&dropping=${Uri.encodeComponent(_droppingController.text)}',
-      );
-      final response = await http.get(url);
+      final response = await http.get(Uri.parse(_routesUrl))
+          .timeout(AppConfig.requestTimeout);
 
       if (response.statusCode == 200) {
         setState(() {
-          _busList = jsonDecode(response.body);
+          _routeList = jsonDecode(response.body);
           _isLoading = false;
         });
       } else {
-        _showError("Failed to load time slots.");
+        _showError("Failed to load routes.");
       }
     } catch (e) {
-      _showError("Connection error. Check your server.");
+      _showError("Connection error.");
     }
   }
 
-  Future<void> _bookTicket(Map<String, dynamic> bus) async {
+  Future<void> _bookTicket(Map<String, dynamic> route) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // ✅ FIX: full email পাঠাও — Django এটা দিয়ে StudentProfile খুঁজবে
     final String userEmail = user.email!;
 
     try {
@@ -96,14 +53,14 @@ class _BookTicketScreenState extends State<BookTicketScreen> {
         Uri.parse(_ticketUrl),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
-          "email": userEmail,   // full email — যেমন reachad22205101708@diu.edu.bd
-          "bus_id": bus['id'],
+          "email": userEmail,
+          "route_id": route['id'],
         }),
-      );
+      ).timeout(AppConfig.requestTimeout);
 
       if (mounted) {
         if (response.statusCode == 201) {
-          _showSnackBar("Ticket booked successfully!", Colors.green);
+          _showSnackBar("Ticket booked successfully! You can board any bus on this route.", Colors.green);
           Future.delayed(const Duration(seconds: 1), () {
             if (mounted) Navigator.pop(context, true);
           });
@@ -117,13 +74,13 @@ class _BookTicketScreenState extends State<BookTicketScreen> {
     }
   }
 
-  void _confirmBooking(Map<String, dynamic> bus) {
+  void _confirmBooking(Map<String, dynamic> route) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Confirm Booking"),
         content: Text(
-          "Do you want to book a seat for the ${bus['formatted_time']} slot?",
+          "Do you want to buy a ticket for ${route['name']}? \nFare: ৳${route['fare']}",
         ),
         actions: [
           TextButton(
@@ -136,7 +93,7 @@ class _BookTicketScreenState extends State<BookTicketScreen> {
             ),
             onPressed: () {
               Navigator.pop(context);
-              _bookTicket(bus);
+              _bookTicket(route);
             },
             child: const Text("Confirm", style: TextStyle(color: Colors.white)),
           ),
@@ -156,7 +113,7 @@ class _BookTicketScreenState extends State<BookTicketScreen> {
       SnackBar(
         content: Text(m),
         backgroundColor: c,
-        duration: const Duration(seconds: 2),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -167,7 +124,7 @@ class _BookTicketScreenState extends State<BookTicketScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text(
-          "Select Slot",
+          "Select Route",
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
@@ -175,95 +132,32 @@ class _BookTicketScreenState extends State<BookTicketScreen> {
         elevation: 0,
         foregroundColor: Colors.black87,
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              children: [
-                _buildAutocompleteField(
-                  "BOARDING POINT",
-                  _boardingController,
-                  _boardingSuggestions,
-                ),
-                const SizedBox(height: 15),
-                _buildAutocompleteField(
-                  "DROPPING POINT",
-                  _droppingController,
-                  _droppingSuggestions,
-                ),
-                const SizedBox(height: 25),
-                SizedBox(
-                  width: 160,
-                  height: 45,
-                  child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _handleSearch,
-                    icon: _isLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Icon(Icons.search, color: Colors.white),
-                    label: const Text(
-                      "Search Slot",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF69AD8E),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                      elevation: 3,
-                    ),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFF69AD8E)),
+            )
+          : _routeList.isEmpty
+              ? const Center(
+                  child: Text(
+                    "No routes available.",
+                    style: TextStyle(color: Colors.grey),
                   ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(20),
+                  itemCount: _routeList.length,
+                  itemBuilder: (context, index) {
+                    final route = _routeList[index];
+                    return GestureDetector(
+                      onTap: () => _confirmBooking(route),
+                      child: _buildRouteCard(route),
+                    );
+                  },
                 ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF69AD8E)),
-                  )
-                : !_isSearched
-                    ? const Center(
-                        child: Text(
-                          "Select points to see available slots",
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      )
-                    : _busList.isEmpty
-                        ? const Center(
-                            child: Text(
-                              "No slots available.",
-                              style: TextStyle(color: Colors.redAccent),
-                            ),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            itemCount: _busList.length,
-                            itemBuilder: (context, index) {
-                              final bus = _busList[index];
-                              return GestureDetector(
-                                onTap: () => _confirmBooking(bus),
-                                child: _buildSlotCard(bus),
-                              );
-                            },
-                          ),
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildSlotCard(Map<String, dynamic> bus) {
+  Widget _buildRouteCard(Map<String, dynamic> route) {
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       padding: const EdgeInsets.all(20),
@@ -277,91 +171,38 @@ class _BookTicketScreenState extends State<BookTicketScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "DEPARTURE TIME",
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey,
-                  fontWeight: FontWeight.bold,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  route["name"],
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Color(0xFF2C3E50),
+                  ),
                 ),
-              ),
-              Text(
-                bus["formatted_time"] ?? "--",
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 22,
-                  color: Color(0xFF69AD8E),
+                const SizedBox(height: 5),
+                Text(
+                  "${route['boarding_point']} → ${route['dropping_point']}",
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              const Text(
-                "AVAILABLE SEATS",
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                "${bus["available_seats"]}",
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-            ],
+          Text(
+            "৳${route["fare"]}",
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF69AD8E),
+            ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildAutocompleteField(
-    String hint,
-    TextEditingController mainController,
-    List<String> options,
-  ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 15),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(25),
-      ),
-      child: Autocomplete<String>(
-        optionsBuilder: (TextEditingValue textEditingValue) {
-          if (textEditingValue.text.isEmpty) return const Iterable<String>.empty();
-          return options.where(
-            (String option) => option.toLowerCase().contains(
-              textEditingValue.text.toLowerCase(),
-            ),
-          );
-        },
-        onSelected: (String selection) {
-          mainController.text = selection;
-          FocusScope.of(context).unfocus();
-        },
-        fieldViewBuilder: (context, fieldController, focusNode, onFieldSubmitted) {
-          if (fieldController.text != mainController.text) {
-            fieldController.text = mainController.text;
-          }
-          return TextField(
-            controller: fieldController,
-            focusNode: focusNode,
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              hintText: hint,
-              hintStyle: const TextStyle(fontSize: 12),
-            ),
-          );
-        },
       ),
     );
   }

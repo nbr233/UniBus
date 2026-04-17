@@ -23,8 +23,8 @@ class TicketOptionScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // অপশন ১: Single Journey
-            _buildOptionCard(
+          // Option 1: Single Journey
+          _buildOptionCard(
               context,
               title: "Single Journey",
               subtitle: "View and book slots for today",
@@ -38,7 +38,7 @@ class TicketOptionScreen extends StatelessWidget {
             ),
             const SizedBox(height: 30),
 
-            // অপশন ২: Multiple Days
+            // Option 2: Multiple Days
             _buildOptionCard(
               context,
               title: "Multiple Days",
@@ -74,7 +74,7 @@ class TicketOptionScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          // withOpacity এর বদলে withValues ব্যবহার করা হয়েছে
+          // Using withValues(alpha:) instead of deprecated withOpacity()
           border: Border.all(
             color: const Color(0xFF69AD8E).withValues(alpha: 0.3),
             width: 2,

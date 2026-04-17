@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http; 
 import 'dart:convert';
 import 'login_screen.dart';
+import '../constants.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -37,6 +38,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
       return;
     }
 
+    // University email validation — only allow DIU email addresses
+    if (!email.endsWith(AppConfig.universityEmailDomain)) {
+      _showMessage(
+        "Please use your university email (${AppConfig.universityEmailDomain})",
+        Colors.redAccent,
+      );
+      return;
+    }
+
     if (password != confirmPassword) {
       _showMessage("Passwords do not match!", Colors.redAccent);
       return;
@@ -45,7 +55,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Firebase Auth Step
+      // Step 1: Create user in Firebase Auth
       debugPrint("Starting Firebase Registration...");
       UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: email,
@@ -55,8 +65,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
       String? firebaseUid = userCredential.user?.uid;
       debugPrint("Firebase Success. UID: $firebaseUid");
 
-      // 2. Django Sync Step (UPDATED IP: 192.168.0.109)
-      const String apiUrl = "http://192.168.0.109:8000/api/students/"; 
+      // Step 2: Sync profile to Django backend
+      // FIX: Using AppConfig.studentsUrl — previous code had wrong IP (192.168.0.109)
+      final String apiUrl = AppConfig.studentsUrl;
       
       debugPrint("Connecting to Django at: $apiUrl");
 
