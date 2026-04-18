@@ -149,7 +149,7 @@ document.getElementById('dispatch-form').addEventListener('submit', async (e) =>
     
     const capacity = document.getElementById('dispatch-capacity').value;
     const payload = {
-        route: routeId,
+        master_route: routeId,
         vehicle: vehicleId,
         bus_number: vehicleOpt.dataset.number,
         total_seats: capacity,
