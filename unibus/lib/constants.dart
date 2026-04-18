@@ -5,7 +5,7 @@ class AppConfig {
   // Local Development Server IP
   // ⚠️ Production Render URL হলে এটি পরিবর্তন করো:
   // static const String baseUrl = 'https://your-app.onrender.com';
-  static const String baseUrl = 'http://192.168.0.101:8000';
+  static const String baseUrl = 'https://unibus-backend-z8e6.onrender.com';
   static const String firebaseDbUrl = 'https://unibus-app-e8e4b-default-rtdb.firebaseio.com';
 
   // API Endpoints

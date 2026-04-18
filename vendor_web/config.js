@@ -12,7 +12,7 @@
 
 const CONFIG = {
   // ⚙️ শুধু এই লাইনটি পরিবর্তন করুন:
-  API_BASE: 'http://127.0.0.1:8000/api',
+  API_BASE: 'https://unibus-backend-z8e6.onrender.com/api',
 
   // 🔥 Firebase Realtime Database URL
   FIREBASE_DB_URL: 'https://unibus-app-e8e4b-default-rtdb.firebaseio.com',
