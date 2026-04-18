@@ -58,7 +58,8 @@ if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
 else:
     CORS_ALLOWED_ORIGINS = [
-        os.environ.get('FRONTEND_ORIGIN', 'https://yourdomain.com'),
+        os.environ.get('FRONTEND_ORIGIN', 'https://unibus-vendor.vercel.app'),
+        'http://localhost:8080',
     ]
 
 ROOT_URLCONF = 'core.urls'
