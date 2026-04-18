@@ -58,7 +58,8 @@ if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
 else:
     CORS_ALLOWED_ORIGINS = [
-        os.environ.get('FRONTEND_ORIGIN', 'https://unibus-vendor.vercel.app'),
+        os.environ.get('FRONTEND_ORIGIN', 'https://uni-bus-three.vercel.app'),
+        'https://uni-bus-three.vercel.app',
         'http://localhost:8080',
     ]
 
