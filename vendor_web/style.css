@@ -137,12 +137,62 @@ body {
 .stat-card.warning h2 { color: #f39c12; }
 
 /* Cards & Forms */
-.card {
-    background-color: #ffffff;
-    padding: 30px;
-    border-radius: 16px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
-    max-width: 800px;
+/* Routes Section Grid Layout */
+.routes-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: 24px;
+    padding: 20px;
+}
+
+.forms-column, .lists-column {
+    display: flex;
+    flex-direction: column;
+}
+
+.readonly-field {
+    background: #f9f9f9 !important;
+    color: #666 !important;
+    cursor: not-allowed;
+}
+
+.mini-table {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.btn-icon {
+    padding: 6px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-icon.edit { color: #2c3e50; }
+.btn-icon.delete { color: #e74c3c; }
+
+@media (max-width: 1024px) {
+    .routes-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.card-badge {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: #69AD8E;
+    color: white;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    border-bottom-right-radius: 12px;
+    text-transform: uppercase;
+}
+
+.card-badge.secondary {
+    background: #2c3e50;
 }
 
 .card h2 {

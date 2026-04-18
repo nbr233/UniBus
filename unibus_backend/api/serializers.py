@@ -1,5 +1,11 @@
 from rest_framework import serializers
-from .models import StudentProfile, Route, Vehicle, Bus, Ticket, Notice, SOSAlert
+from .models import StudentProfile, Route, Vehicle, Bus, Ticket, Notice, SOSAlert, MasterRoute
+
+
+class MasterRouteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MasterRoute
+        fields = '__all__'
 
 
 class StudentProfileSerializer(serializers.ModelSerializer):
@@ -19,7 +25,10 @@ class RouteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Route
-        fields = '__all__'
+        fields = [
+            'id', 'master_route', 'schedule_time', 'schedule_time_display',
+            'name', 'boarding_point', 'dropping_point', 'fare'
+        ]
 
     def get_schedule_time_display(self, obj):
         if obj.schedule_time:
@@ -35,7 +44,7 @@ class VehicleSerializer(serializers.ModelSerializer):
 
 class BusSerializer(serializers.ModelSerializer):
     formatted_time = serializers.ReadOnlyField()
-    route_details = RouteSerializer(source='route', read_only=True)
+    master_route_details = MasterRouteSerializer(source='master_route', read_only=True)
     vehicle_details = VehicleSerializer(source='vehicle', read_only=True)
 
     class Meta:
@@ -62,7 +71,7 @@ class SOSAlertSerializer(serializers.ModelSerializer):
 
 
 class TicketSerializer(serializers.ModelSerializer):
-    route_details = RouteSerializer(source='route', read_only=True)
+    master_route_details = MasterRouteSerializer(source='master_route', read_only=True)
     bus_details = BusSerializer(source='bus_assigned', read_only=True)
     student_name = serializers.SerializerMethodField()
 
@@ -72,8 +81,9 @@ class TicketSerializer(serializers.ModelSerializer):
             'id',
             'user',
             'student_name',
-            'route',
-            'route_details',
+            'master_route',
+            'master_route_details',
+            'desired_time',
             'bus_assigned',
             'bus_details',
             'booking_id',

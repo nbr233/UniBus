@@ -24,7 +24,7 @@ class TicketOptionScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
           // Option 1: Single Journey
-          _buildOptionCard(
+            _buildOptionCard(
               context,
               title: "Single Journey",
               subtitle: "View and book slots for today",
@@ -32,7 +32,7 @@ class TicketOptionScreen extends StatelessWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const BookTicketScreen()),
+                  MaterialPageRoute(builder: (context) => const BookTicketScreen(isPreBooking: false)),
                 );
               },
             ),
@@ -42,14 +42,12 @@ class TicketOptionScreen extends StatelessWidget {
             _buildOptionCard(
               context,
               title: "Multiple Days",
-              subtitle: "Pre-book for upcoming days (Coming Soon)",
+              subtitle: "Pre-book for upcoming days",
               icon: Icons.calendar_month_rounded,
               onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Advanced booking is coming soon!"),
-                    behavior: SnackBarBehavior.floating,
-                  ),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const BookTicketScreen(isPreBooking: true)),
                 );
               },
             ),

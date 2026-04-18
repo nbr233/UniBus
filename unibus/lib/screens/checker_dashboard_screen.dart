@@ -69,9 +69,9 @@ class _CheckerDashboardScreenState extends State<CheckerDashboardScreen> {
           success: true,
           title: "✅ Valid Ticket",
           lines: [
-            "Passenger: ${data['student_name']}",
-            "ID: ${data['student_id']}",
-            "Route: ${data['route']}",
+            "Passenger: ${data['student_name'] ?? 'Unknown'}",
+            "ID: ${data['student_id'] ?? ''}",
+            "Route: ${data['route'] ?? ''}",
           ],
         );
       } else {

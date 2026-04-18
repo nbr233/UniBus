@@ -120,9 +120,10 @@ class _ActiveTicketCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final routeDetails = ticket['route_details'];
+    final routeDetails = ticket['master_route_details'];
     final busDetails = ticket['bus_details'];
     final bookingId = ticket['booking_id'] ?? "";
+    final desiredTime = ticket['desired_time'];
     final hasBus = busDetails != null;
 
     return Container(
@@ -178,6 +179,20 @@ class _ActiveTicketCard extends StatelessWidget {
                     "${routeDetails['boarding_point']} → ${routeDetails['dropping_point']}",
                     style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
+                if (desiredTime != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.access_time, size: 12, color: Colors.white60),
+                        const SizedBox(width: 4),
+                        Text(
+                          "Preferred: $desiredTime",
+                          style: const TextStyle(color: Colors.white60, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -188,12 +203,25 @@ class _ActiveTicketCard extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // QR Code
-                QrImageView(
-                  data: bookingId,
-                  size: 100,
-                  version: QrVersions.auto,
-                  backgroundColor: Colors.white,
+                // QR Code with tap to enlarge
+                GestureDetector(
+                  onTap: () => _showEnlargedQR(context, bookingId),
+                  child: Hero(
+                    tag: 'qr-$bookingId',
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[200]!),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: QrImageView(
+                        data: bookingId,
+                        size: 90,
+                        version: QrVersions.auto,
+                        backgroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -207,7 +235,23 @@ class _ActiveTicketCard extends StatelessWidget {
                       if (hasBus) ...[
                         _TicketInfo("Bus Code", busDetails!['bus_id_code'] ?? "—", highlight: true),
                         const SizedBox(height: 4),
-                        const Text("🚌 Bus Assigned!", style: TextStyle(color: Color(0xFF52B788), fontWeight: FontWeight.bold, fontSize: 12)),
+                        _TicketInfo("Bus", busDetails['vehicle_details']?['name'] ?? busDetails['bus_number'] ?? "Assigned"),
+                        const SizedBox(height: 4),
+                        const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle, size: 13, color: Color(0xFF52B788)),
+                            SizedBox(width: 4),
+                            Text(
+                              "Bus Assigned!",
+                              style: TextStyle(
+                                color: Color(0xFF52B788),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
                       ] else ...[
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -215,9 +259,16 @@ class _ActiveTicketCard extends StatelessWidget {
                             color: Colors.orange.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text(
-                            "⏳ Awaiting Bus Assignment",
-                            style: TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.w600),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.hourglass_top, size: 13, color: Colors.orange),
+                              SizedBox(width: 4),
+                              Text(
+                                "Awaiting Bus Assignment",
+                                style: TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.w600),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -228,6 +279,47 @@ class _ActiveTicketCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showEnlargedQR(BuildContext context, String data) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Scan Ticket",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              Hero(
+                tag: 'qr-$data',
+                child: QrImageView(
+                  data: data,
+                  size: 250,
+                  version: QrVersions.auto,
+                  backgroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                data,
+                style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 20),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Close", style: TextStyle(color: Color(0xFF52B788), fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

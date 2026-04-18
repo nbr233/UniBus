@@ -8,3 +8,8 @@ __pycache__/
 *.log
 android/.gradle/
 ios/Pods/
+.env
+google-services.json
+GoogleService-Info.plist
+*.pyc
+db.sqlite3

@@ -174,7 +174,7 @@ class _TicketHistoryCard extends StatelessWidget {
                   Expanded(
                     child: _DetailItem(
                       icon: Icons.directions_bus_outlined,
-                      label: "Bus Code",
+                      label: "Bus: ${busDetails['vehicle_details']?['name'] ?? 'Bus'}",
                       value: busDetails['bus_id_code'] ?? "—",
                     ),
                   ),

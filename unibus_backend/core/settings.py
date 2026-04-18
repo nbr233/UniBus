@@ -1,13 +1,18 @@
 import os
 import dj_database_url
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-# Store this in a .env file and never commit it to version control
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-1_qhb)tf8y(*_8tvjh5!se4vvk)f=y#z9xs3x+-5suhx_7vp2+')
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable is not set!")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Fixed: 'True' == 'True' correctly enables debug mode when env var is set to 'True'
@@ -77,13 +82,15 @@ TEMPLATES = [
 WSGI_APPLICATION = 'core.wsgi.application'
 
 # Database: dynamic config supporting both local and Render PostgreSQL
-# Uses DATABASE_URL env var on Render, falls back to local database
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL', 'postgresql://unibus_db_user:F8i46buIgccUtzxcGnjsTl4XOgWPPCxt@dpg-d7h1cnugvqtc73errqe0-a.ohio-postgres.render.com/unibus_db'),
+        default=os.environ.get('DATABASE_URL'),
         conn_max_age=600
     )
 }
+
+if not DATABASES['default']:
+    raise ValueError("DATABASE_URL environment variable is not set!")
 
 # Standard password validators
 AUTH_PASSWORD_VALIDATORS = [
@@ -95,7 +102,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization settings
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Dhaka'
 USE_I18N = True
 USE_TZ = True
 

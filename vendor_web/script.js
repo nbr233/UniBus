@@ -1,6 +1,6 @@
-// ⚠️ change this to your production URL (e.g., https://your-app.onrender.com/api)
-const API_BASE = 'http://192.168.0.106:8000/api';
-const FIREBASE_DB_URL = 'https://unibus-app-e8e4b-default-rtdb.firebaseio.com';
+// ✅ URLs are managed centrally in config.js — এখানে কিছু পরিবর্তন করবেন না।
+const API_BASE = CONFIG.API_BASE;
+const FIREBASE_DB_URL = CONFIG.FIREBASE_DB_URL;
 
 // Navigation Logic
 document.querySelectorAll('.nav-item').forEach(button => {
@@ -221,25 +221,135 @@ async function completeTrip(tripId) {
     }
 }
 
-// 4. Routes
-document.getElementById('route-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const payload = {
-        name: document.getElementById('route-name').value,
-        boarding_point: document.getElementById('boarding-point').value,
-        dropping_point: document.getElementById('dropping-point').value,
-        schedule_time: document.getElementById('route-time').value || null,
-        fare: document.getElementById('fare').value
-    };
+// 4. Routes Management (Centralized Logic with Edit Support)
+let _allMasterRoutes = [];
+let _allSchedules = [];
+
+async function fetchMasterRoutes() {
     try {
-        const response = await fetch(`${API_BASE}/routes/`, {
-            method: 'POST',
+        const response = await fetch(`${API_BASE}/master-routes/`);
+        _allMasterRoutes = await response.json();
+        
+        // Populate Dropdown
+        const dropdown = document.getElementById('master-route-dropdown');
+        dropdown.innerHTML = '<option value="">-- Choose a Route --</option>';
+        _allMasterRoutes.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.id;
+            opt.textContent = r.name;
+            opt.dataset.boarding = r.boarding_point;
+            opt.dataset.dropping = r.dropping_point;
+            opt.dataset.fare = r.fare;
+            dropdown.appendChild(opt);
+        });
+
+        // Populate Master Routes Table
+        const tbody = document.querySelector('#master-routes-table tbody');
+        tbody.innerHTML = '';
+        _allMasterRoutes.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${r.name}</strong><br><small>${r.boarding_point} &rarr; ${r.dropping_point}</small></td>
+                <td>৳${r.fare}</td>
+                <td>
+                    <button class="btn-icon edit" onclick="editMasterRoute(${r.id})">✏️</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (error) {
+        console.error('Error fetching master routes:', error);
+    }
+}
+
+// Auto-fill logic for Step 2
+document.getElementById('master-route-dropdown').addEventListener('change', (e) => {
+    const opt = e.target.options[e.target.selectedIndex];
+    if (opt.value) {
+        document.getElementById('boarding-point').value = opt.dataset.boarding;
+        document.getElementById('dropping-point').value = opt.dataset.dropping;
+        document.getElementById('fare').value = `৳${opt.dataset.fare}`;
+    } else {
+        document.getElementById('boarding-point').value = '';
+        document.getElementById('dropping-point').value = '';
+        document.getElementById('fare').value = '';
+    }
+});
+
+// Master Route Submit (Create or Update)
+document.getElementById('master-route-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('edit-master-id').value;
+    const payload = {
+        name: document.getElementById('master-route-name').value,
+        boarding_point: document.getElementById('master-boarding').value,
+        dropping_point: document.getElementById('master-dropping').value,
+        fare: document.getElementById('master-fare').value
+    };
+
+    const url = id ? `${API_BASE}/master-routes/${id}/` : `${API_BASE}/master-routes/`;
+    const method = id ? 'PUT' : 'POST';
+
+    try {
+        const response = await fetch(url, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
         if (response.ok) {
-            showMessage('route-msg', 'Route defined!', true);
-            document.getElementById('route-form').reset();
+            showMessage('master-route-msg', id ? 'Master Route Updated!' : 'Master Route Created!', true);
+            cancelMasterEdit();
+            fetchMasterRoutes();
+            fetchRoutes(); // Update schedules table too as they might have changed visually
+        }
+    } catch (error) {
+        showMessage('master-route-msg', 'Network error.', false);
+    }
+});
+
+function editMasterRoute(id) {
+    const route = _allMasterRoutes.find(r => r.id === id);
+    if (!route) return;
+
+    document.getElementById('edit-master-id').value = route.id;
+    document.getElementById('master-route-name').value = route.name;
+    document.getElementById('master-boarding').value = route.boarding_point;
+    document.getElementById('master-dropping').value = route.dropping_point;
+    document.getElementById('master-fare').value = route.fare;
+
+    document.getElementById('master-submit-btn').textContent = "Update Master Route";
+    document.getElementById('master-cancel-btn').style.display = "block";
+}
+
+function cancelMasterEdit() {
+    document.getElementById('master-route-form').reset();
+    document.getElementById('edit-master-id').value = "";
+    document.getElementById('master-submit-btn').textContent = "Create Master Route";
+    document.getElementById('master-cancel-btn').style.display = "none";
+}
+document.getElementById('master-cancel-btn').addEventListener('click', cancelMasterEdit);
+
+// Schedule Submit (Create or Update)
+document.getElementById('route-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('edit-schedule-id').value;
+    const payload = {
+        master_route: document.getElementById('master-route-dropdown').value,
+        schedule_time: document.getElementById('route-time').value
+    };
+
+    const url = id ? `${API_BASE}/routes/${id}/` : `${API_BASE}/routes/`;
+    const method = id ? 'PUT' : 'POST';
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+            showMessage('route-msg', id ? 'Schedule Updated!' : 'Schedule Defined!', true);
+            cancelScheduleEdit();
             fetchRoutes();
         }
     } catch (error) {
@@ -247,22 +357,51 @@ document.getElementById('route-form').addEventListener('submit', async (e) => {
     }
 });
 
+function editSchedule(id) {
+    const sch = _allSchedules.find(s => s.id === id);
+    if (!sch) return;
+
+    document.getElementById('edit-schedule-id').value = sch.id;
+    document.getElementById('master-route-dropdown').value = sch.master_route;
+    
+    // Trigger auto-fill
+    const event = new Event('change');
+    document.getElementById('master-route-dropdown').dispatchEvent(event);
+    
+    // Extract time (HH:mm) if it's HH:mm:ss
+    const timeVal = sch.schedule_time ? sch.schedule_time.substring(0, 5) : "";
+    document.getElementById('route-time').value = timeVal;
+
+    document.getElementById('schedule-submit-btn').textContent = "Update Schedule";
+    document.getElementById('schedule-cancel-btn').style.display = "block";
+}
+
+function cancelScheduleEdit() {
+    document.getElementById('route-form').reset();
+    document.getElementById('edit-schedule-id').value = "";
+    document.getElementById('schedule-submit-btn').textContent = "Define Schedule";
+    document.getElementById('schedule-cancel-btn').style.display = "none";
+}
+document.getElementById('schedule-cancel-btn').addEventListener('click', cancelScheduleEdit);
+
 async function fetchRoutes() {
     try {
         const response = await fetch(`${API_BASE}/routes/`);
-        const routes = await response.json();
+        _allSchedules = await response.json();
         const tbody = document.querySelector('#routes-list-table tbody');
         tbody.innerHTML = '';
-        routes.forEach(r => {
+        _allSchedules.forEach(r => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><strong>${r.name}</strong></td>
-                <td>${r.boarding_point} &rarr; ${r.dropping_point}</td>
-                <td>${r.schedule_time || 'Flexible'}</td>
-                <td>৳${r.fare}</td>
+                <td><strong>${r.name}</strong><br><small>${r.boarding_point} &rarr; ${r.dropping_point}</small></td>
+                <td>${r.schedule_time_display || 'Flexible'}</td>
+                <td>
+                    <button class="btn-icon edit" onclick="editSchedule(${r.id})">✏️</button>
+                </td>
             `;
             tbody.appendChild(tr);
         });
+        fetchMasterRoutes(); // Sync dropdown
     } catch (error) {
         console.error('Error fetching routes:', error);
     }

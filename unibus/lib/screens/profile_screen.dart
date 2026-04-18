@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'dart:async';
 import '../constants.dart';
 import 'login_screen.dart';
@@ -143,7 +144,9 @@ class _LiveBalanceCardState extends State<_LiveBalanceCard> {
 
   void _startListening() {
     if (widget.studentId == null) return;
-    _sub = FirebaseDatabase.instance
+    _sub = FirebaseDatabase.instanceFor(
+            app: Firebase.app(),
+            databaseURL: AppConfig.firebaseDbUrl)
         .ref('wallets/${widget.studentId}/balance')
         .onValue
         .listen((event) {

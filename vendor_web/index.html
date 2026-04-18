@@ -175,50 +175,109 @@
 
             <!-- Manage Routes Section -->
             <section id="routes" class="content-section">
-                <div class="card">
-                    <h2>Define New Route</h2>
-                    <form id="route-form">
-                        <div class="form-group">
-                            <label>Route Name</label>
-                            <input type="text" id="route-name" placeholder="e.g., Mirpur to Campus" required>
+                <div class="routes-grid">
+                    <!-- Left Column: Forms -->
+                    <div class="forms-column">
+                        <!-- Step 1: Create Master Route -->
+                        <div class="card">
+                            <div class="card-badge">Step 1</div>
+                            <h2>1. Create Master Route</h2>
+                            <form id="master-route-form">
+                                <input type="hidden" id="edit-master-id">
+                                <div class="form-group">
+                                    <label>Route Path Name</label>
+                                    <input type="text" id="master-route-name" placeholder="e.g., DSC to Dhanmondi" required>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Boarding</label>
+                                        <input type="text" id="master-boarding" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Dropping</label>
+                                        <input type="text" id="master-dropping" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Fare (৳)</label>
+                                        <input type="number" id="master-fare" step="0.01" required>
+                                    </div>
+                                </div>
+                                <button type="submit" id="master-submit-btn" class="btn primary">Create Master Route</button>
+                                <button type="button" id="master-cancel-btn" class="btn secondary" style="display: none; margin-top: 10px;">Cancel Edit</button>
+                            </form>
+                            <div id="master-route-msg" class="message"></div>
                         </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Boarding Point</label>
-                                <input type="text" id="boarding-point" required>
-                            </div>
-                            <div class="form-group">
-                                <label>Dropping Point</label>
-                                <input type="text" id="dropping-point" required>
-                            </div>
-                            <div class="form-group">
-                                <label>Schedule Time (Default)</label>
-                                <input type="time" id="route-time">
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label>Fare (৳)</label>
-                            <input type="number" id="fare" value="10.00" step="0.01" required>
-                        </div>
-                        <button type="submit" class="btn primary">Create Route</button>
-                    </form>
-                    <div id="route-msg" class="message"></div>
-                </div>
 
-                <div class="card mt-20">
-                    <h2>Existing Routes</h2>
-                    <div class="table-container">
-                        <table id="routes-list-table">
-                            <thead>
-                                <tr>
-                                    <th>Route</th>
-                                    <th>Points</th>
-                                    <th>Time</th>
-                                    <th>Fare</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
+                        <!-- Step 2: Define Schedule -->
+                        <div class="card mt-20">
+                            <div class="card-badge secondary">Step 2</div>
+                            <h2>2. Define Schedule Time</h2>
+                            <form id="route-form">
+                                <input type="hidden" id="edit-schedule-id">
+                                <div class="form-group">
+                                    <label>Select Master Route</label>
+                                    <select id="master-route-dropdown" required>
+                                        <option value="">-- Choose a Route --</option>
+                                    </select>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Boarding (Auto)</label>
+                                        <input type="text" id="boarding-point" readonly class="readonly-field">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Dropping (Auto)</label>
+                                        <input type="text" id="dropping-point" readonly class="readonly-field">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Fare (Auto)</label>
+                                        <input type="text" id="fare" readonly class="readonly-field">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Schedule Time</label>
+                                    <input type="time" id="route-time" required>
+                                </div>
+                                <button type="submit" id="schedule-submit-btn" class="btn primary">Define Schedule</button>
+                                <button type="button" id="schedule-cancel-btn" class="btn secondary" style="display: none; margin-top: 10px;">Cancel Edit</button>
+                            </form>
+                            <div id="route-msg" class="message"></div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Lists -->
+                    <div class="lists-column">
+                        <div class="card">
+                            <h2>Master Routes List</h2>
+                            <div class="table-container mini-table">
+                                <table id="master-routes-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Fare</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="card mt-20">
+                            <h2>Existing Schedules</h2>
+                            <div class="table-container">
+                                <table id="routes-list-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Route</th>
+                                            <th>Time</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -336,6 +395,7 @@
         </main>
     </div>
 
+    <script src="config.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

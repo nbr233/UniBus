@@ -8,6 +8,7 @@ from .views import (
     TicketViewSet,
     NoticeViewSet,
     SOSAlertViewSet,
+    MasterRouteViewSet,
     get_route_suggestions,
     validate_ticket,
     recharge_wallet,
@@ -20,8 +21,9 @@ from .views import (
 # Register ViewSets with the router
 router = DefaultRouter()
 router.register(r'students', StudentProfileViewSet)
+router.register(r'master-routes', MasterRouteViewSet)
 router.register(r'routes', RouteViewSet, basename='route')
-router.register(r'vehicles', VehicleViewSet)
+router.register(r'vehicles', VehicleViewSet, basename='vehicle')
 router.register(r'buses', BusViewSet, basename='bus')
 router.register(r'tickets', TicketViewSet, basename='ticket')
 router.register(r'notices', NoticeViewSet, basename='notice')

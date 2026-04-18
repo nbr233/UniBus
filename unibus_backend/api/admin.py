@@ -1,10 +1,33 @@
 from django.contrib import admin
-from .models import StudentProfile, Route, Bus, Ticket, Notice, SOSAlert
+from .models import StudentProfile, Route, Bus, Ticket, Notice, SOSAlert, MasterRoute
+
+class RouteInline(admin.TabularInline):
+    model = Route
+    extra = 3
+
+@admin.register(MasterRoute)
+class MasterRouteAdmin(admin.ModelAdmin):
+    verbose_name = "Create Route & Fare"
+    verbose_name_plural = "1. Create Routes & Fares"
+    list_display = ('name', 'boarding_point', 'dropping_point', 'fare')
+    search_fields = ('name', 'boarding_point', 'dropping_point')
+    inlines = [RouteInline]
 
 @admin.register(Route)
 class RouteAdmin(admin.ModelAdmin):
-    list_display = ('name', 'boarding_point', 'dropping_point', 'fare')
-    search_fields = ('name', 'boarding_point', 'dropping_point')
+    verbose_name = "Define Schedule"
+    verbose_name_plural = "2. Define Schedules"
+    list_display = ('master_route', 'schedule_time', 'get_boarding', 'get_dropping', 'get_fare')
+    list_filter = ('master_route',)
+
+    def get_boarding(self, obj): return obj.boarding_point
+    get_boarding.short_description = 'Boarding'
+    
+    def get_dropping(self, obj): return obj.dropping_point
+    get_dropping.short_description = 'Dropping'
+    
+    def get_fare(self, obj): return obj.fare
+    get_fare.short_description = 'Fare (৳)'
 
 @admin.register(StudentProfile)
 class StudentProfileAdmin(admin.ModelAdmin):
@@ -14,8 +37,8 @@ class StudentProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Bus)
 class BusAdmin(admin.ModelAdmin):
-    list_display = ('bus_id_code', 'bus_number', 'route', 'departure_time', 'date', 'status')
-    search_fields = ('bus_id_code', 'bus_number', 'route__name')
+    list_display = ('bus_id_code', 'bus_number', 'master_route', 'departure_time', 'date', 'status')
+    search_fields = ('bus_id_code', 'bus_number', 'master_route__name')
     list_filter = ('date', 'status')
 
 @admin.register(Ticket)
