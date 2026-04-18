@@ -3,6 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.db.models import F
+from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, action
@@ -386,7 +387,7 @@ def get_route_suggestions(request):
 # ================================================================
 @api_view(['GET'])
 def vendor_stats(request):
-    today = date.today()
+    today = timezone.localdate()
     return Response({
         'total_tickets_today': Ticket.objects.filter(travel_date=today).count(),
         'waiting_passengers': Ticket.objects.filter(
@@ -402,7 +403,7 @@ def vendor_stats(request):
 # ================================================================
 @api_view(['GET'])
 def vendor_demand(request):
-    today = date.today()
+    today = timezone.localdate()
     demand_data = []
 
     for m_route in MasterRoute.objects.all():

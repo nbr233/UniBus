@@ -193,7 +193,7 @@ async function fetchActiveTrips() {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><strong style="font-size:18px;letter-spacing:3px;color:#2D6A4F">${t.bus_id_code}</strong><br><small>Give this to Checker</small></td>
-                <td>${t.route_details ? t.route_details.name : '—'}</td>
+                <td>${t.master_route_details ? t.master_route_details.name : '—'}</td>
                 <td>${t.bus_number}</td>
                 <td><span class="status-badge status-Active">${t.status}</span></td>
                 <td><button class="btn btn-small secondary" onclick="completeTrip(${t.id})">Complete Trip</button></td>
