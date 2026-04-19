@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import StudentProfile, Route, Vehicle, Bus, Ticket, Notice, SOSAlert, MasterRoute
+from .models import StudentProfile, Route, Vehicle, Bus, Ticket, Notice, SOSAlert, MasterRoute, LostAndFound
 
 
 class MasterRouteSerializer(serializers.ModelSerializer):
@@ -64,6 +64,18 @@ class SOSAlertSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SOSAlert
+        fields = '__all__'
+
+    def get_student_name(self, obj):
+        return f"{obj.student.first_name} {obj.student.last_name}"
+
+
+class LostAndFoundSerializer(serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+    student_id_display = serializers.CharField(source='student.student_id', read_only=True)
+
+    class Meta:
+        model = LostAndFound
         fields = '__all__'
 
     def get_student_name(self, obj):

@@ -7,7 +7,7 @@ from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, action
-from .models import StudentProfile, Route, Vehicle, Bus, Ticket, Notice, SOSAlert, MasterRoute
+from .models import StudentProfile, Route, Vehicle, Bus, Ticket, Notice, SOSAlert, MasterRoute, LostAndFound
 from .serializers import (
     StudentProfileSerializer,
     RouteSerializer,
@@ -16,7 +16,8 @@ from .serializers import (
     TicketSerializer,
     NoticeSerializer,
     SOSAlertSerializer,
-    MasterRouteSerializer
+    MasterRouteSerializer,
+    LostAndFoundSerializer
 )
 
 
@@ -330,7 +331,44 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
 
 
 # ================================================================
-# 9. Wallet Recharge
+# 9. Lost & Found ViewSet
+# ================================================================
+class LostAndFoundViewSet(viewsets.ModelViewSet):
+    serializer_class = LostAndFoundSerializer
+
+    def get_queryset(self):
+        identifier = self.request.query_params.get('student_id')
+        if identifier:
+            return LostAndFound.objects.filter(
+                student__student_id=identifier
+            ).order_by('-created_at')
+        return LostAndFound.objects.all().order_by('-created_at')
+
+    def create(self, request, *args, **kwargs):
+        firebase_uid = request.data.get('firebase_uid')
+        item_name = request.data.get('item_name')
+        description = request.data.get('description')
+        bus_number = request.data.get('bus_number')
+
+        if not firebase_uid or not item_name:
+            return Response({'error': 'firebase_uid and item_name are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            student = StudentProfile.objects.get(firebase_uid=firebase_uid)
+        except StudentProfile.DoesNotExist:
+            return Response({'error': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        item = LostAndFound.objects.create(
+            student=student,
+            item_name=item_name,
+            description=description,
+            bus_number=bus_number
+        )
+        return Response(LostAndFoundSerializer(item).data, status=status.HTTP_201_CREATED)
+
+
+# ================================================================
+# 10. Wallet Recharge
 # ================================================================
 @api_view(['POST'])
 def recharge_wallet(request):
@@ -363,7 +401,7 @@ def recharge_wallet(request):
 
 
 # ================================================================
-# 10. Route Suggestions
+# 11. Route Suggestions
 # ================================================================
 @api_view(['GET'])
 def get_route_suggestions(request):
@@ -383,7 +421,7 @@ def get_route_suggestions(request):
 
 
 # ================================================================
-# 11. Vendor Stats
+# 12. Vendor Stats
 # ================================================================
 @api_view(['GET'])
 def vendor_stats(request):
@@ -395,11 +433,12 @@ def vendor_stats(request):
         ).count(),
         'active_fleet': Bus.objects.filter(status='Active', date=today).count(),
         'sos_alerts': SOSAlert.objects.filter(status='Pending').count(),
+        'lost_and_found': LostAndFound.objects.filter(status='Pending').count(),
     })
 
 
 # ================================================================
-# 12. Vendor Demand Tracking (MasterRoute-based)
+# 13. Vendor Demand Tracking (MasterRoute-based)
 # ================================================================
 @api_view(['GET'])
 def vendor_demand(request):
@@ -431,7 +470,7 @@ def vendor_demand(request):
 
 
 # ================================================================
-# 13. Vendor — Add / List Checkers
+# 14. Vendor — Add / List Checkers
 # ================================================================
 @api_view(['GET', 'POST'])
 def vendor_add_checker(request):
@@ -481,7 +520,7 @@ def vendor_add_checker(request):
 
 
 # ================================================================
-# 14. Custom Login (Checker / Staff)
+# 15. Custom Login (Checker / Staff)
 # ================================================================
 @api_view(['POST'])
 def custom_login(request):

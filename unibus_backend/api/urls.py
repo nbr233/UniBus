@@ -9,6 +9,7 @@ from .views import (
     NoticeViewSet,
     SOSAlertViewSet,
     MasterRouteViewSet,
+    LostAndFoundViewSet,
     get_route_suggestions,
     validate_ticket,
     recharge_wallet,
@@ -28,6 +29,7 @@ router.register(r'buses', BusViewSet, basename='bus')
 router.register(r'tickets', TicketViewSet, basename='ticket')
 router.register(r'notices', NoticeViewSet, basename='notice')
 router.register(r'sos', SOSAlertViewSet, basename='sos')
+router.register(r'lost-and-found', LostAndFoundViewSet, basename='lost-and-found')
 
 urlpatterns = [
     path('', include(router.urls)),

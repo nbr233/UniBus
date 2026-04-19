@@ -168,3 +168,25 @@ class SOSAlert(models.Model):
 
     def __str__(self):
         return f"SOS by {self.student.student_id} — {self.status}"
+
+
+class LostAndFound(models.Model):
+    STATUS_CHOICES = (
+        ('Pending', 'Pending'),
+        ('Processing', 'Processing'),
+        ('Found', 'Found'),
+        ('Resolved', 'Resolved'),
+    )
+    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE)
+    item_name = models.CharField(max_length=200)
+    description = models.TextField()
+    bus_number = models.CharField(max_length=50, blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    vendor_response = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Lost: {self.item_name} by {self.student.student_id}"

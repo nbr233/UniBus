@@ -19,6 +19,7 @@ document.querySelectorAll('.nav-item').forEach(button => {
         if (targetId === 'routes') fetchRoutes();
         if (targetId === 'staff') fetchStaff();
         if (targetId === 'sos') fetchSOS();
+        if (targetId === 'lost-found') fetchLostFound();
     });
 });
 
@@ -41,7 +42,8 @@ async function fetchStats() {
         document.getElementById('stat-tickets').textContent = stats.total_tickets_today;
         document.getElementById('stat-waiting').textContent = stats.waiting_passengers;
         document.getElementById('stat-fleet').textContent = stats.active_fleet;
-        document.getElementById('stat-sos').textContent = stats.sos_alerts;
+        // Combine SOS and Lost reports for the warning card
+        document.getElementById('stat-sos').textContent = (stats.sos_alerts || 0) + (stats.lost_and_found || 0);
     } catch (error) {
         console.error('Error fetching stats:', error);
     }
@@ -546,6 +548,71 @@ document.getElementById('notice-form').addEventListener('submit', async (e) => {
         }
     } catch (error) {
         showMessage('notice-msg', 'Network error.', false);
+    }
+});
+
+// 9. Lost & Found Logic
+async function fetchLostFound() {
+    try {
+        const response = await fetch(`${API_BASE}/lost-and-found/`);
+        const reports = await response.json();
+        const tbody = document.querySelector('#lost-found-table tbody');
+        tbody.innerHTML = '';
+        if (reports.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:24px">No lost and found reports.</td></tr>';
+            return;
+        }
+        reports.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${r.item_name}</strong><br><small>${r.bus_number || 'No Bus Info'}</small></td>
+                <td>${r.student_id_display}</td>
+                <td>${r.description}</td>
+                <td><span class="status-badge status-${r.status}">${r.status}</span></td>
+                <td><button class="btn btn-small primary" onclick="showLFAction(${r.id}, '${r.item_name}')">Action</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (error) {
+        console.error('Error fetching lost & found:', error);
+    }
+}
+
+function showLFAction(id, name) {
+    document.getElementById('lost-found-action-container').style.display = 'block';
+    document.getElementById('lf-report-id').value = id;
+    document.getElementById('lf-item-name').textContent = name;
+    document.getElementById('lost-found-action-container').scrollIntoView({ behavior: 'smooth' });
+}
+
+function closeLFAction() {
+    document.getElementById('lost-found-action-container').style.display = 'none';
+}
+
+document.getElementById('lost-found-action-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('lf-report-id').value;
+    const payload = {
+        status: document.getElementById('lf-status').value,
+        vendor_response: document.getElementById('lf-response').value
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/lost-and-found/${id}/`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+            showMessage('lf-msg', 'Report updated successfully!', true);
+            setTimeout(() => {
+                closeLFAction();
+                fetchLostFound();
+                fetchStats();
+            }, 1500);
+        }
+    } catch (error) {
+        showMessage('lf-msg', 'Network error.', false);
     }
 });
 

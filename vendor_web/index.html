@@ -36,6 +36,9 @@
                 <button class="nav-item" data-target="notices">
                     <span class="icon">📢</span> Send Notice
                 </button>
+                <button class="nav-item" data-target="lost-found">
+                    <span class="icon">🔍</span> Lost & Found
+                </button>
                 <button class="nav-item" data-target="sos">
                     <span class="icon">🚨</span> SOS Alerts
                 </button>
@@ -64,7 +67,7 @@
                         <h2 id="stat-fleet">0</h2>
                     </div>
                     <div class="stat-card warning">
-                        <span class="stat-label">SOS Alerts</span>
+                        <span class="stat-label">SOS/Lost Reports</span>
                         <h2 id="stat-sos">0</h2>
                     </div>
                 </div>
@@ -368,6 +371,52 @@
                         <button type="submit" class="btn primary">Send Notice</button>
                     </form>
                     <div id="notice-msg" class="message"></div>
+                </div>
+            </section>
+
+            <!-- Lost & Found Section -->
+            <section id="lost-found" class="content-section">
+                <div class="card">
+                    <h2>Lost & Found Reports</h2>
+                    <button class="btn secondary mb-10" onclick="fetchLostFound()">Refresh Reports</button>
+                    <div class="table-container">
+                        <table id="lost-found-table">
+                            <thead>
+                                <tr>
+                                    <th>Item Name</th>
+                                    <th>Student ID</th>
+                                    <th>Description</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Update Report Modal/Container -->
+                <div id="lost-found-action-container" class="card mt-20" style="display: none;">
+                    <h2>Take Action on Report: <span id="lf-item-name"></span></h2>
+                    <form id="lost-found-action-form">
+                        <input type="hidden" id="lf-report-id">
+                        <div class="form-group">
+                            <label>Update Status</label>
+                            <select id="lf-status" required>
+                                <option value="Pending">Pending</option>
+                                <option value="Processing">Processing</option>
+                                <option value="Found">Found</option>
+                                <option value="Resolved">Resolved (Returned)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Vendor Message / Action Taken</label>
+                            <textarea id="lf-response" rows="3" placeholder="e.g. Item found. Please collect from Office A."></textarea>
+                        </div>
+                        <button type="submit" class="btn primary">Update Report</button>
+                        <button type="button" onclick="closeLFAction()" class="btn secondary">Cancel</button>
+                    </form>
+                    <div id="lf-msg" class="message"></div>
                 </div>
             </section>
 

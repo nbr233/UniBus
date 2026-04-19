@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'dart:async';
 import '../constants.dart';
 import 'login_screen.dart';
+import 'lost_and_found_screen.dart'; // [NEW] Import
 
 class ProfileScreen extends StatelessWidget {
   final String? studentId;
@@ -72,8 +73,24 @@ class ProfileScreen extends StatelessWidget {
               children: [
                 _InfoTile(label: "Student ID", value: studentId ?? "Not linked", icon: Icons.badge_outlined),
                 _InfoTile(label: "Email", value: user?.email ?? "—", icon: Icons.email_outlined),
-                _InfoTile(label: "App Version", value: "UniBus v1.0", icon: Icons.info_outlined),
+                const SizedBox(height: 10),
+                
+                // ── [NEW] Lost & Found Menu ──
+                _MenuTile(
+                  label: "Lost & Found",
+                  icon: Icons.search_off_rounded,
+                  color: Colors.orange[700]!,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LostAndFoundScreen()),
+                    );
+                  },
+                ),
+                
                 const SizedBox(height: 20),
+                _InfoTile(label: "App Version", value: "UniBus v1.0", icon: Icons.info_outlined),
+                const SizedBox(height: 10),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red[50],
@@ -210,6 +227,55 @@ class _InfoTile extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MenuTile extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _MenuTile({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            Icon(Icons.chevron_right, color: Colors.grey[400]),
+          ],
+        ),
       ),
     );
   }

@@ -20,6 +20,7 @@ class AppConfig {
   static const String noticesUrl = '$baseUrl/api/notices/';
   static const String sosUrl = '$baseUrl/api/sos/';
   static const String validateTicketUrl = '$baseUrl/api/validate-ticket/';
+  static const String lostAndFoundUrl = '$baseUrl/api/lost-and-found/';
 
   // University email domain (Validation-এর জন্য)
   static const String universityEmailDomain = '@diu.edu.bd';
