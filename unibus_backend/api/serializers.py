@@ -15,7 +15,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'student_id', 'first_name', 'last_name',
             'mobile_number', 'email', 'role', 'wallet_balance',
-            'profile_picture', 'created_at'
+            'profile_picture', 'created_at', 'firebase_uid'
         ]
         read_only_fields = ['created_at']
 

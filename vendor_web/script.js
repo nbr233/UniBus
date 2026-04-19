@@ -85,7 +85,7 @@ async function fetchVehicles() {
             tr.innerHTML = `<td>${v.name}</td><td>${v.bus_number}</td><td>${v.total_seats} ${v.is_available ? '<span class="status-badge status-Pending">Available</span>' : '<span class="status-badge status-SOS">In Use</span>'}</td>`;
             tbody.appendChild(tr);
         });
-        
+
         // Also update the dispatch dropdown (Only Available)
         const dropdown = document.getElementById('dispatch-vehicle-id');
         dropdown.innerHTML = '<option value="">-- Select a Bus --</option>';
@@ -146,7 +146,7 @@ document.getElementById('dispatch-form').addEventListener('submit', async (e) =>
     const vehicleSelect = document.getElementById('dispatch-vehicle-id');
     const vehicleId = vehicleSelect.value;
     const vehicleOpt = vehicleSelect.options[vehicleSelect.selectedIndex];
-    
+
     const capacity = document.getElementById('dispatch-capacity').value;
     const payload = {
         master_route: routeId,
@@ -229,7 +229,7 @@ async function fetchMasterRoutes() {
     try {
         const response = await fetch(`${API_BASE}/master-routes/`);
         _allMasterRoutes = await response.json();
-        
+
         // Populate Dropdown
         const dropdown = document.getElementById('master-route-dropdown');
         dropdown.innerHTML = '<option value="">-- Choose a Route --</option>';
@@ -363,11 +363,11 @@ function editSchedule(id) {
 
     document.getElementById('edit-schedule-id').value = sch.id;
     document.getElementById('master-route-dropdown').value = sch.master_route;
-    
+
     // Trigger auto-fill
     const event = new Event('change');
     document.getElementById('master-route-dropdown').dispatchEvent(event);
-    
+
     // Extract time (HH:mm) if it's HH:mm:ss
     const timeVal = sch.schedule_time ? sch.schedule_time.substring(0, 5) : "";
     document.getElementById('route-time').value = timeVal;
@@ -473,7 +473,7 @@ document.getElementById('recharge-form').addEventListener('submit', async (e) =>
         if (response.ok) {
             const data = await response.json();
             showMessage('recharge-msg', `Success! New Balance: ${data.new_balance}`, true);
-            
+
             // 🔥 Live Sync to Firebase Realtime Database
             try {
                 await fetch(`${FIREBASE_DB_URL}/wallets/${studentId}.json`, {
